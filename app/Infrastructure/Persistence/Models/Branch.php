@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Infrastructure\Persistence\Models;
+
+use App\Infrastructure\Persistence\Concerns\HasUuidV7;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Branch extends Model
+{
+    use HasUuidV7;
+    use SoftDeletes;
+
+    protected $fillable = [
+        'code',
+        'name',
+        'address',
+        'pic_name',
+        'is_hq',
+        'is_active',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_hq' => 'boolean',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class, 'default_branch_id');
+    }
+
+    public function userBranches(): HasMany
+    {
+        return $this->hasMany(UserBranch::class);
+    }
+}

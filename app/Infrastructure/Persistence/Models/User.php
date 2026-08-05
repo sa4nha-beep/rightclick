@@ -4,24 +4,20 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Models;
 
+use App\Infrastructure\Persistence\Concerns\HasUuidV7;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-/**
- * Model Eloquent berada di lapisan Infrastructure/Persistence
- * (HS-ARCH-RIGHTCLICK-v1.1 bagian 2.1) — bukan di `app/Models`.
- *
- * Bentuk final tabel `users` (UUID v7, `user_branches`, penonaktifan darurat
- * lokal) adalah lingkup T1.4. Di T1.1 model ini hanya dipindahkan ke lapisan
- * yang benar agar tidak ada kode yang lahir di lokasi yang salah.
- */
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
+    use HasUuidV7;
     use Notifiable;
 
     /**
@@ -29,12 +25,16 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
+        'default_branch_id',
+        'is_active',
     ];
 
     /**
-     * S4 — kata sandi tidak pernah ikut terserialisasi.
+     * S4 — kata sandi dan remember_token tidak pernah muncul di log atau
+     * terserialisasi.
      *
      * @var list<string>
      */
@@ -49,8 +49,18 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
+    }
+
+    public function defaultBranch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'default_branch_id');
+    }
+
+    public function branches(): HasMany
+    {
+        return $this->hasMany(UserBranch::class);
     }
 }
