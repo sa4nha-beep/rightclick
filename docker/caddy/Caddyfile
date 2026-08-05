@@ -1,0 +1,51 @@
+# RIGHTCLICK — Caddy
+# S2: akses antarmuka di dalam LAN toko memakai HTTPS dengan sertifikat internal.
+# `tls internal` menerbitkan sertifikat dari CA internal Caddy — tidak ada
+# ketergantungan pada ACME/internet, sesuai R8 (operasi tetap jalan saat internet putus).
+
+{
+	admin off
+	# Tidak ada email ACME: seluruh sertifikat diterbitkan CA internal.
+	auto_https disable_redirects
+}
+
+{$APP_DOMAIN:rightclick.localhost} {
+	tls internal
+
+	root * /var/www/html/public
+	encode zstd gzip
+
+	php_fastcgi app:9000 {
+		# Nota thermal dan laporan dapat memakan waktu; POS tidak boleh
+		# terputus oleh timeout proxy yang terlalu pendek.
+		read_timeout 120s
+	}
+
+	file_server
+
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	# Berkas sensitif tidak pernah dilayani sebagai berkas statis (S3).
+	@forbidden path /.env* /storage/logs/* /.git/*
+	respond @forbidden 404
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+# Port 80 tetap dilayani untuk terminal POS yang belum memasang CA internal,
+# hanya sebagai pengalihan ke HTTPS.
+#
+# Tujuan pengalihan memakai APP_HTTPS_AUTHORITY, bukan {host}: di lingkungan
+# pengembangan port HTTPS dipetakan (mis. 8443) sehingga {host} akan kehilangan
+# port dan menghasilkan tautan yang tidak dapat dibuka.
+http://{$APP_DOMAIN:rightclick.localhost} {
+	redir https://{$APP_HTTPS_AUTHORITY:rightclick.localhost}{uri} permanent
+}

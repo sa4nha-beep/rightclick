@@ -1,0 +1,126 @@
+# RIGHTCLICK — susunan Docker Compose per node.
+# Referensi: HS-ARCH-RIGHTCLICK-v1.1 bagian 9.1, HS-TASKS-RIGHTCLICK-v1.1 T1.1.
+#
+# Satu file ini dipakai untuk node cabang maupun node HQ; pembeda ada pada
+# .env (RIGHTCLICK_NODE_ROLE, RIGHTCLICK_BRANCH_CODE).
+#
+# Service `backup` (pg_dump + enkripsi + off-site) adalah lingkup T1.12
+# dan sengaja belum ada di sini.
+
+name: rightclick
+
+x-app: &app-base
+  build:
+    context: .
+    dockerfile: docker/app/Dockerfile
+  image: rightclick/app:dev
+  restart: unless-stopped
+  env_file:
+    - .env
+  volumes:
+    - .:/var/www/html
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - rightclick
+
+services:
+  app:
+    <<: *app-base
+    container_name: rightclick-app
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(0);'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    image: caddy:2-alpine
+    container_name: rightclick-web
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-rightclick.localhost}
+      APP_HTTPS_AUTHORITY: ${APP_DOMAIN:-rightclick.localhost}:${WEB_HTTPS_PORT:-443}
+    ports:
+      - "${WEB_HTTP_PORT:-8080}:80"
+      - "${WEB_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./public:/var/www/html/public:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    networks:
+      - rightclick
+
+  db:
+    image: postgres:16-alpine
+    container_name: rightclick-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-rightclick}
+      POSTGRES_USER: ${DB_USERNAME:-rightclick}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-rightclick}
+      # UUID v7 sebagai primary key dibangkitkan aplikasi (DB Design 7),
+      # jadi tidak ada ekstensi uuid yang perlu dipasang di sini.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    # S1: port database tidak pernah terbuka ke internet — hanya loopback host.
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/postgres/initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-rightclick} -d ${DB_DATABASE:-rightclick}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - rightclick
+
+  redis:
+    image: redis:7-alpine
+    container_name: rightclick-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rightclick
+
+  # H1 (HS-ARCH 9.6): i3-7100 hanya 2 core fisik — worker dibatasi 1 proses.
+  # Jangan menaikkan `replicas` tanpa memantau load average lebih dulu.
+  worker:
+    <<: *app-base
+    container_name: rightclick-worker
+    command: ["php", "artisan", "queue:work", "--queue=sync,default", "--tries=3", "--backoff=10", "--max-time=3600", "--sleep=1"]
+    deploy:
+      replicas: 1
+    stop_grace_period: 60s
+
+  scheduler:
+    <<: *app-base
+    container_name: rightclick-scheduler
+    command: ["php", "artisan", "schedule:work"]
+    stop_grace_period: 30s
+
+networks:
+  rightclick:
+    driver: bridge
+
+volumes:
+  db-data:
+  redis-data:
+  caddy-data:
+  caddy-config:

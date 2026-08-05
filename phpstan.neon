@@ -1,0 +1,16 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    # DoD5 — PHPStan level 6 wajib bersih sebelum task dinyatakan selesai.
+    level: 6
+
+    paths:
+        - app
+        - config
+        - database
+        - routes
+
+    # Berkas placeholder struktur direktori Clean Architecture.
+    excludePaths:
+        - app/**/.gitkeep

@@ -5,7 +5,7 @@ Berkas konteks proyek untuk sesi Claude Code. Dibaca otomatis di awal setiap ses
 **Proyek:** RIGHTCLICK — ERP internal HAEN KOMPUTER
 **Unit pemilik:** HAEN KOMPUTER (HK) · **Unit pelaksana:** HAEN SOFTWARE (HS)
 **Versi:** 1.0 · Agustus 2026
-**Gate:** G3 diajukan — development dimulai setelah G3 disetujui COO
+**Gate:** G3 diajukan — development siap dimulai
 
 ---
 
@@ -324,9 +324,11 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 ## 11. Development Tasks
 
-52 task dalam 5 fase. Setiap task dirancang untuk satu sesi Claude Code, disusun berdasarkan ketergantungan.
+62 task dalam 5 fase. Setiap task dirancang untuk satu sesi Claude Code, disusun berdasarkan ketergantungan.
 
-**Daftar lengkap: `HS-TASKS-RIGHTCLICK-v1.0`.** Mulai dari **T1.1**.
+**Daftar lengkap: `HS-TASKS-RIGHTCLICK-v1.1`** — memuat rekomendasi model Claude per task (MD1–MD4).
+
+**Kemajuan:** T1.1 selesai. Task berikutnya: **T1.2** (GitHub Actions — Pest, PHPStan level 6, `composer audit`).
 
 ### Tiga simpul yang tidak boleh dilewati
 
@@ -462,10 +464,46 @@ Seluruhnya di `FOUNDER MODE/04_PROJECTS/ACTIVE/HS-RIGHTCLICK/01_DOCS/`
 | API Specification | 1.0 | Final |
 | Permission Matrix | 1.1 | Final |
 | UI Requirements | 1.1 | Final |
-| Development Tasks | 1.0 | Draft — menunggu G3 |
+| Development Tasks | 1.1 | Final |
 | Brand Identity Guidelines | 1.0 | Final |
 
 **Bila dokumen dan kode berbeda, dokumen yang berlaku.** Perubahan requirement hanya melalui versi dokumen baru yang disetujui — bukan melalui perubahan kode.
+
+---
+
+## 18. Menjalankan Proyek (Development)
+
+Ditambahkan pada T1.1. Seluruh perkakas berjalan **di dalam container** — PHP, Composer, dan PostgreSQL tidak perlu terpasang di mesin pengembang.
+
+```
+cp .env.example .env
+docker compose up -d --build
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate
+```
+
+Antarmuka Filament: `https://rightclick.localhost:8443/admin` (sertifikat CA internal Caddy, S2).
+
+| Tujuan | Perintah |
+|---|---|
+| Test suite | `docker compose exec app php artisan test` |
+| PHPStan level 6 | `docker compose exec app vendor/bin/phpstan analyse` |
+| Format kode | `docker compose exec app vendor/bin/pint` |
+| Seluruh gate DoD | `docker compose exec app composer check` |
+
+### Ketentuan yang ditetapkan pada T1.1
+
+| # | Ketentuan | Alasan |
+|---|---|---|
+| B1 | Model Eloquent berada di `app/Infrastructure/Persistence/Models`. **`app/Models` tidak dihidupkan kembali** | Aturan lapisan HS-ARCH 2.1; ditegakkan `tests/Arch/LayeringTest.php` |
+| B2 | Panel Filament berada di `App\Presentation\Filament`, discovery menunjuk `app/Presentation/Filament/{Resources,Pages,Widgets}` | Sama |
+| B3 | Test suite berjalan di atas **PostgreSQL** (`rightclick_testing`), bukan SQLite | Skema bergantung pada CHECK constraint, indeks unik parsial, `numeric(18,2)`, `jsonb`, `SELECT ... FOR UPDATE` — SQLite akan meloloskan pelanggaran yang ditolak produksi |
+| B4 | `APP_TIMEZONE=UTC`; zona tampilan `Asia/Jakarta` dibaca dari `config('rightclick.display_timezone')` | DB Design 7 — `timestamptz` disimpan UTC, ditampilkan Asia/Jakarta |
+| B5 | Peran node dibaca dari `config('rightclick.node.role')` → `App\Domain\Shared\Enums\NodeRole` | Satu basis kode melayani tiga node; pembeda hanya `.env` |
+| B6 | `.gitignore` memakai pola `.env.*` dengan pengecualian `.env.example` | ERP Arabica pernah membocorkan kredensial produksi lewat `.env.bak` yang tidak masuk daftar abaikan |
+| B7 | `worker` dibatasi 1 proses | H1 — i3-7100 hanya 2 core fisik |
+
+Service `backup` belum ada di `docker-compose.yml`; itu lingkup **T1.12**, dan T1.12 mengunci penyelesaian Fase 1.
 
 ---
 
