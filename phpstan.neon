@@ -14,3 +14,13 @@ parameters:
     # Berkas placeholder struktur direktori Clean Architecture.
     excludePaths:
         - app/**/.gitkeep
+
+    ignoreErrors:
+        -
+            # T1.3 — trait fondasi (HasUuidV7, TracksUserActions, BelongsToBranch)
+            # baru dipakai model nyata mulai T1.4 (branches, users). PHPStan
+            # menganggap trait tanpa pemakai di app/ sebagai tidak terpakai;
+            # pemakaiannya saat ini hanya di kelas anonim tests/, yang berada
+            # di luar `paths` analisis.
+            identifier: trait.unused
+            path: app/Infrastructure/Persistence/Concerns/*.php

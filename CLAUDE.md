@@ -328,7 +328,7 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 **Daftar lengkap: `HS-TASKS-RIGHTCLICK-v1.1`** — memuat rekomendasi model Claude per task (MD1–MD4).
 
-**Kemajuan:** T1.1 selesai. Task berikutnya: **T1.2** (GitHub Actions — Pest, PHPStan level 6, `composer audit`).
+**Kemajuan:** T1.1–T1.3 selesai. Task berikutnya: **T1.4** (migration + model + seeder: `branches`, `users`, `user_branches`).
 
 ### Tiga simpul yang tidak boleh dilewati
 
@@ -504,6 +504,20 @@ Antarmuka Filament: `https://rightclick.localhost:8443/admin` (sertifikat CA int
 | B7 | `worker` dibatasi 1 proses | H1 — i3-7100 hanya 2 core fisik |
 
 Service `backup` belum ada di `docker-compose.yml`; itu lingkup **T1.12**, dan T1.12 mengunci penyelesaian Fase 1.
+
+### Fondasi model (T1.3)
+
+Empat trait/scope di `app/Infrastructure/Persistence/{Concerns,Scopes,Support}`, dipakai seluruh model transaksi mulai T1.4:
+
+| Komponen | Fungsi |
+|---|---|
+| `Concerns\HasUuidV7` | Primary key UUID v7 (Laravel 12 native `Str::uuid7()`), non-incrementing, key string |
+| `Concerns\TracksUserActions` | Mengisi `created_by`/`updated_by` dari `Auth::id()`; tidak menimpa nilai yang sudah diset eksplisit (mis. saat sinkronisasi); `created_by` boleh kosong (seeder `branches` mendahului akun Owner) |
+| `Concerns\BelongsToBranch` + `Scopes\BranchScope` | Global scope yang menyaring ke `branch_id` aktif (R12); mengisi `branch_id` otomatis saat `creating`. Lintas cabang yang disengaja (laporan Owner/HQ) memakai `withoutGlobalScope(BranchScope::class)` |
+| `Support\BranchContext` | Scoped singleton penampung cabang aktif; sumber nilainya (sesi, `default_branch_id`) baru diwire di T1.4/T2.5 |
+| `Support\MigrationMacros` | Macro `Blueprint`: `uuidPrimaryKey()`, `userStamps()` (nullable, FK `users` RESTRICT), `branchId()` (FK `branches` RESTRICT). Granular secara sengaja — tidak semua tabel memakai kombinasi yang sama (`audit_logs`/`stock_mutations` append-only tidak memakai `userStamps()` atau soft delete) |
+
+Soft delete memakai `Illuminate\Database\Eloquent\SoftDeletes` bawaan Laravel langsung pada model — tidak dibungkus trait tambahan, karena tidak ada perilaku RIGHTCLICK-spesifik yang perlu ditambahkan di atasnya.
 
 ---
 
