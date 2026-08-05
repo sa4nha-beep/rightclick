@@ -11,12 +11,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
+    use HasRoles;
     use HasUuidV7;
     use Notifiable;
 
@@ -54,11 +56,17 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * @return BelongsTo<Branch>
+     */
     public function defaultBranch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'default_branch_id');
     }
 
+    /**
+     * @return HasMany<UserBranch>
+     */
     public function branches(): HasMany
     {
         return $this->hasMany(UserBranch::class);

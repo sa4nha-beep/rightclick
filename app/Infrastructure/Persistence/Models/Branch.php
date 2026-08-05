@@ -31,11 +31,17 @@ class Branch extends Model
         ];
     }
 
+    /**
+     * @return HasMany<User>
+     */
     public function users(): HasMany
     {
         return $this->hasMany(User::class, 'default_branch_id');
     }
 
+    /**
+     * @return HasMany<UserBranch>
+     */
     public function userBranches(): HasMany
     {
         return $this->hasMany(UserBranch::class);

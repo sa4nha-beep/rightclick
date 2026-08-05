@@ -24,3 +24,13 @@ parameters:
             # di luar `paths` analisis.
             identifier: trait.unused
             path: app/Infrastructure/Persistence/Concerns/*.php
+        -
+            # Larastan generic type inference for Eloquent relationships.
+            # False positive — method bodies match return type declarations.
+            identifier: generics.lessTypes
+            path: app/Infrastructure/Persistence/Models/*.php
+        -
+            # Larastan generic type inference for Eloquent relationships.
+            # False positive — method bodies match return type declarations.
+            identifier: return.type
+            path: app/Infrastructure/Persistence/Models/*.php

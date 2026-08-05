@@ -19,11 +19,17 @@ class UserBranch extends Model
 
     protected $table = 'user_branches';
 
+    /**
+     * @return BelongsTo<User>
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * @return BelongsTo<Branch>
+     */
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
