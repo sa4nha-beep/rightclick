@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # DoD5 — Pint format check
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pgsql,redis,intl,bcmath,gd,zip,pcntl
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Install dependencies
+        if: steps.composer-cache.outputs.cache-hit != 'true'
+        run: composer install --no-progress --prefer-dist
+
+      - name: Run Pint
+        run: vendor/bin/pint --test
+
+  # DoD5 — PHPStan level 6
+  analyse:
+    name: Analyse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pgsql,redis,intl,bcmath,gd,zip,pcntl
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Install dependencies
+        if: steps.composer-cache.outputs.cache-hit != 'true'
+        run: composer install --no-progress --prefer-dist
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+  # DoD1 — Pest test suite
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: rightclick
+          POSTGRES_USER: rightclick
+          POSTGRES_PASSWORD: rightclick
+          POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pgsql,redis,intl,bcmath,gd,zip,pcntl
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Install dependencies
+        if: steps.composer-cache.outputs.cache-hit != 'true'
+        run: composer install --no-progress --prefer-dist
+
+      - name: Setup Laravel
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan migrate --force
+
+      - name: Create test database
+        run: psql -h localhost -U rightclick -d rightclick -c 'CREATE DATABASE rightclick_testing OWNER rightclick;'
+        env:
+          PGPASSWORD: rightclick
+
+      - name: Run tests
+        run: php artisan test
+
+  # DoD5 — composer audit
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Install dependencies
+        if: steps.composer-cache.outputs.cache-hit != 'true'
+        run: composer install --no-progress --prefer-dist
+
+      - name: Audit dependencies
+        run: composer audit
