@@ -45,7 +45,60 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+use App\Infrastructure\Persistence\Models\Branch;
+use App\Infrastructure\Persistence\Models\Permission;
+use App\Infrastructure\Persistence\Models\Role;
+use App\Infrastructure\Persistence\Models\User;
+use Illuminate\Support\Str;
+
+/**
+ * Membuat Branch nyata untuk test Policy (T1.6). Kode acak agar tidak
+ * bentrok dengan unique constraint antar test — aman karena setiap test
+ * dibungkus transaksi DB yang di-rollback di afterEach pemanggilnya.
+ */
+function makeTestBranch(array $attributes = []): Branch
 {
-    // ..
+    return Branch::create(array_merge([
+        'code' => 'TST-'.Str::upper(Str::random(6)),
+        'name' => 'Cabang Uji',
+        'is_hq' => false,
+        'is_active' => true,
+    ], $attributes));
+}
+
+/**
+ * Membuat User nyata, opsional dengan permission tertentu terpasang lewat
+ * role sekali-pakai. Dipakai test Policy (T1.6) untuk membuktikan
+ * otorisasi berbasis spatie/laravel-permission, bukan mock.
+ */
+function makeTestUser(array $permissionNames = []): User
+{
+    $branch = makeTestBranch();
+
+    $user = User::create([
+        'name' => 'Pengguna Uji',
+        'username' => 'uji_'.Str::lower(Str::random(12)),
+        'email' => Str::lower(Str::random(12)).'@rightclick.test',
+        'password' => 'password',
+        'default_branch_id' => $branch->id,
+        'is_active' => true,
+    ]);
+
+    if ($permissionNames !== []) {
+        $role = Role::create([
+            'name' => 'role_uji_'.Str::lower(Str::random(12)),
+            'guard_name' => 'web',
+        ]);
+
+        foreach ($permissionNames as $permissionName) {
+            $permission = Permission::firstOrCreate(
+                ['name' => $permissionName, 'guard_name' => 'web']
+            );
+            $role->givePermissionTo($permission);
+        }
+
+        $user->assignRole($role);
+    }
+
+    return $user;
 }

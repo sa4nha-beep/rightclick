@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Pengujian arsitektur atas aturan lapisan yang mengikat pada
@@ -9,7 +10,7 @@ declare(strict_types=1);
  * Aturan lapisan yang hanya tertulis di dokumen akan luntur seiring waktu.
  * Berkas ini menjadikannya gate CI.
  *
- * Architecture test untuk Policy (G2) ditambahkan pada T1.5, dan untuk
+ * Architecture test untuk Policy (P4) ditambahkan pada T1.6, dan untuk
  * penulis tunggal `stock_mutations` pada T3.2.
  */
 arch('lapisan Domain tidak bergantung pada framework')
@@ -70,4 +71,34 @@ it('tidak menaruh kode di app/Models', function () {
     expect(is_dir(app_path('Models')))->toBeFalse(
         'app/Models tidak boleh dihidupkan kembali — model Eloquent milik lapisan Infrastructure.',
     );
+});
+
+it('setiap model Eloquent RIGHTCLICK memiliki Policy (P4)', function () {
+    // Model milik paket spatie/laravel-permission, diperluas hanya untuk
+    // primary key UUID v7 (T1.5). Otorisasinya dikelola package itu
+    // sendiri lewat permission check, bukan Policy per model.
+    $excluded = ['Permission', 'Role'];
+
+    $modelFiles = glob(app_path('Infrastructure/Persistence/Models/*.php'));
+
+    expect($modelFiles)->not->toBeEmpty();
+
+    foreach ($modelFiles as $file) {
+        $modelClass = 'App\\Infrastructure\\Persistence\\Models\\'.basename($file, '.php');
+
+        if (in_array(class_basename($modelClass), $excluded, true)) {
+            continue;
+        }
+
+        if (! class_exists($modelClass) || ! is_subclass_of($modelClass, Model::class)) {
+            continue;
+        }
+
+        // Guesser bawaan Laravel: App\...\Models\Foo -> App\...\Policies\FooPolicy.
+        $policyClass = str_replace('\\Models\\', '\\Policies\\', $modelClass).'Policy';
+
+        expect(class_exists($policyClass))->toBeTrue(
+            "{$modelClass} tidak memiliki Policy ({$policyClass}) — wajib per P4.",
+        );
+    }
 });
