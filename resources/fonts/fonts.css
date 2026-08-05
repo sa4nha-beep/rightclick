@@ -1,0 +1,73 @@
+/*
+  HAEN KOMPUTER — Inter (dimuat lokal)
+  ------------------------------------------------------------------
+  Wajib dimuat dari file lokal ini, BUKAN dari Google Fonts CDN.
+  Alasan: RIGHTCLICK harus tetap tampil normal saat internet eksternal
+  terputus (R13 / UT15, HS-UI-RIGHTCLICK-v1.1).
+
+  Path diasumsikan: resources/fonts/inter/ relatif terhadap file CSS ini.
+  Sesuaikan path bila diletakkan di lokasi build Filament yang berbeda
+  (mis. public/fonts/inter/ setelah proses build asset).
+
+  Lisensi: SIL Open Font License 1.1 — lihat resources/fonts/inter/LICENSE.txt
+  Sumber: The Inter Project (https://github.com/rsms/inter), didistribusikan
+  ulang melalui paket @fontsource/inter (npm), dipilih karena domain
+  fonts.google.com tidak tersedia pada allowlist jaringan lingkungan build.
+*/
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./inter/Inter-Regular.woff2") format("woff2"),
+       url("./inter/Inter-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./inter/Inter-Medium.woff2") format("woff2"),
+       url("./inter/Inter-Medium.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./inter/Inter-SemiBold.woff2") format("woff2"),
+       url("./inter/Inter-SemiBold.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./inter/Inter-Bold.woff2") format("woff2"),
+       url("./inter/Inter-Bold.woff") format("woff");
+}
+
+:root {
+  --font-sans: "Inter", -apple-system, "Segoe UI", sans-serif;
+
+  /* Design token warna — HS-UI-RIGHTCLICK-v1.1 Bagian 2.1 */
+  --haen-cyan: #00B4D4;
+  --haen-black: #000000;
+  --haen-white: #FFFFFF;
+  --haen-cyan-hover: #0099B5;
+  --haen-cyan-subtle: #E6F7FB;
+  --haen-gray-900: #1A1A1A;
+  --haen-gray-600: #666666;
+  --haen-gray-300: #D4D4D4;
+  --haen-gray-100: #F5F5F5;
+
+  /* Palet semantik — disetujui CEO sebagai pengecualian terbatas, khusus RIGHTCLICK */
+  --state-success: #0E9F6E;
+  --state-warning: #D97706;
+  --state-danger: #DC2626;
+  --state-neutral: #666666;
+}
