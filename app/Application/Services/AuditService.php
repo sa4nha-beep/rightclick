@@ -31,13 +31,13 @@ final class AuditService
     /**
      * Catat aksi terhadap sebuah model.
      *
-     * @param Model $model Model yang dipengaruhi
-     * @param AuditAction $action Jenis aksi
-     * @param array<string, mixed>|null $oldValues Nilai sebelum (optional)
-     * @param array<string, mixed>|null $newValues Nilai sesudah (optional)
-     * @param array<string, mixed>|null $metadata Konteks tambahan: alasan, tujuan, dst.
-     * @param string|null $actorId ID pengguna yang bertindak (default: Auth::id())
-     * @param string|null $branchId ID cabang (default: dari model atau auth user)
+     * @param  Model  $model  Model yang dipengaruhi
+     * @param  AuditAction  $action  Jenis aksi
+     * @param  array<string, mixed>|null  $oldValues  Nilai sebelum (optional)
+     * @param  array<string, mixed>|null  $newValues  Nilai sesudah (optional)
+     * @param  array<string, mixed>|null  $metadata  Konteks tambahan: alasan, tujuan, dst.
+     * @param  string|null  $actorId  ID pengguna yang bertindak (default: Auth::id())
+     * @param  string|null  $branchId  ID cabang (default: dari model atau auth user)
      */
     public function log(
         Model $model,
@@ -70,12 +70,11 @@ final class AuditService
      * Dipakai oleh middleware atau gate authorization yang mendeteksi
      * akses tanpa permission, bukan dari model observer.
      *
-     * @param string $modelType Fully qualified class name dari model yang diakses
-     * @param string $modelId ID record yang tidak dapat diakses
-     * @param AuditAction $action Aksi yang dicoba (biasanya AccessDenied)
-     * @param array<string, mixed>|null $metadata Konteks: permission diminta, alasan, dst.
-     * @param string|null $branchId ID cabang (default: Auth::user()->branch_id jika ada)
-     * @param string|null $actorId ID pengguna (default: Auth::id())
+     * @param  string  $modelType  Fully qualified class name dari model yang diakses
+     * @param  string  $modelId  ID record yang tidak dapat diakses
+     * @param  array<string, mixed>|null  $metadata  Konteks: permission diminta, alasan, dst.
+     * @param  string|null  $branchId  ID cabang (default: Auth::user()->branch_id jika ada)
+     * @param  string|null  $actorId  ID pengguna (default: Auth::id())
      */
     public function logAccessDenied(
         string $modelType,

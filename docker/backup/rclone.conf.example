@@ -1,0 +1,25 @@
+# RIGHTCLICK — contoh konfigurasi rclone untuk sinkronisasi off-site (T1.12).
+#
+# Salin berkas ini menjadi `rclone.conf` (tanpa akhiran .example) di direktori
+# yang sama, isi kredensial sesungguhnya, JANGAN commit ke repositori (S3).
+#
+# rclone mendukung banyak backend — pilih salah satu, tidak mengunci
+# RIGHTCLICK pada satu vendor cloud tertentu. Dua contoh paling umum:
+
+# --- Backblaze B2 (murah, cocok untuk retensi dump terenkripsi jangka panjang) ---
+# [b2]
+# type = b2
+# account = <account_id>
+# key = <application_key>
+
+# --- SFTP ke server terpisah (mis. node cabang lain sebagai off-site sederhana) ---
+# [sftp-remote]
+# type = sftp
+# host = <hostname_atau_ip>
+# user = <username>
+# key_file = /root/.ssh/id_backup
+
+# Setelah diisi, set BACKUP_OFFSITE_REMOTE di .env, contoh:
+#   BACKUP_OFFSITE_REMOTE=b2:haen-rightclick-backup/HK-A
+# atau
+#   BACKUP_OFFSITE_REMOTE=sftp-remote:/backups/HK-A

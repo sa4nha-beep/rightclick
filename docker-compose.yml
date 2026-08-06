@@ -3,9 +3,6 @@
 #
 # Satu file ini dipakai untuk node cabang maupun node HQ; pembeda ada pada
 # .env (RIGHTCLICK_NODE_ROLE, RIGHTCLICK_BRANCH_CODE).
-#
-# Service `backup` (pg_dump + enkripsi + off-site) adalah lingkup T1.12
-# dan sengaja belum ada di sini.
 
 name: rightclick
 
@@ -115,6 +112,34 @@ services:
     command: ["php", "artisan", "schedule:work"]
     stop_grace_period: 30s
 
+  # pg_dump harian + enkripsi + retensi 30/12/12 + sinkronisasi off-site
+  # (CLAUDE.md §14). Container terpisah dari `app`: passphrase enkripsi
+  # (BACKUP_ENCRYPTION_PASSPHRASE) tidak pernah terpapar ke proses aplikasi.
+  # T1.12 — Backup wajib aktif dan terverifikasi sebelum Fase 1 selesai.
+  backup:
+    build:
+      context: .
+      dockerfile: docker/backup/Dockerfile
+    image: rightclick/backup:dev
+    container_name: rightclick-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    volumes:
+      - backup-data:/backups
+      # Kredensial off-site (rclone) TIDAK disimpan di repositori (S3).
+      # Salin docker/backup/rclone.conf.example ke docker/backup/rclone.conf
+      # (sudah di-gitignore) sebelum mengaktifkan BACKUP_OFFSITE_REMOTE.
+      - ./docker/backup/rclone.conf:/root/.config/rclone/rclone.conf:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - rightclick
+
 networks:
   rightclick:
     driver: bridge
@@ -124,3 +149,4 @@ volumes:
   redis-data:
   caddy-data:
   caddy-config:
+  backup-data:

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Persistence\Models;
 
 use App\Infrastructure\Persistence\Concerns\HasUuidV7;
+use Database\Factories\Infrastructure\Persistence\Models\BranchFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,7 +13,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Branch extends Model
 {
+    /** @use HasFactory<BranchFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
 

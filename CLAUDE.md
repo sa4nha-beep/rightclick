@@ -328,7 +328,7 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 **Daftar lengkap: `HS-TASKS-RIGHTCLICK-v1.1`** — memuat rekomendasi model Claude per task (MD1–MD4).
 
-**Kemajuan:** T1.1–T1.11 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`, T1.8 trait `HasDocumentState` + `DocumentStateService` draft→final→void, T1.9 tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals`, T1.10 tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif, T1.11 tabel `audit_logs` append-only + `AuditLog` model + `AuditService` + 5 test). Task berikutnya: **T1.12** (backup layer, completing Fase 1 Platform & Access Control).
+**Kemajuan:** T1.1–T1.12 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`, T1.8 trait `HasDocumentState` + `DocumentStateService` draft→final→void, T1.9 tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals`, T1.10 tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif, T1.11 tabel `audit_logs` append-only + `AuditLog` model + `AuditService` + 5 test, T1.12 service `backup` — pg_dump harian + enkripsi + retensi 30/12/12 + off-site + uji restore bulanan, diverifikasi end-to-end). **Fase 1 (Platform & Access Control) selesai.** Fase berikutnya: **Fase 2 — Master Data**.
 
 > **Catatan T1.9 (diselesaikan):** permission baru T1.9 memakai gaya `snake_case` mengikuti `PermissionSeeder` yang sudah ada, bukan notasi titik `HS-PERM-RIGHTCLICK-v1.1`. Ketidaksesuaian ini direkonsiliasi dengan menerbitkan `HS-PERM-RIGHTCLICK-v1.2` (revisi penamaan mengikuti kode, status Draft menunggu approval COO) — lihat §17.
 
@@ -403,6 +403,8 @@ Intel Core i3-7100 · RAM 16 GB DDR4 · SSD 512 GB · UPS 1200 VA
 `pg_dump` harian per node, terenkripsi sebelum meninggalkan server, off-site, retensi 30 hari / 12 minggu / 12 bulan, uji restore bulanan.
 
 **Backup wajib aktif dan terverifikasi sebelum Fase 1 dinyatakan selesai.**
+
+**Implementasi (T1.12):** service `backup` di `docker-compose.yml`, image `postgres:16-alpine` (pg_dump/pg_restore selalu sama versi dengan server) + gnupg + rclone. Skrip: `docker/backup/backup.sh` (dump → enkripsi AES256 simetris → salin weekly/monthly → retensi berbasis jumlah berkas → sinkronisasi off-site via rclone), `docker/backup/restore-test.sh` (dekripsi dump terbaru → restore ke database sementara → verifikasi tabel inti ada → hapus database sementara). Dijadwalkan via cron di dalam container (`BACKUP_SCHEDULE_DAILY`, default 02:00 **Asia/Jakarta** — bukan UTC, wajib di luar jam operasional). Enkripsi memakai passphrase simetris (`BACKUP_ENCRYPTION_PASSPHRASE`), bukan keypair asimetris — trade-off disengaja agar node tak berawak dapat menjalankan uji restore bulanan otomatis tanpa kunci privat off-site. Kredensial off-site (`docker/backup/rclone.conf`, digitignore) terpisah dari kredensial database; `BACKUP_OFFSITE_REMOTE` kosong = backup tetap jalan tapi hanya lokal, dengan peringatan di log. Diverifikasi manual end-to-end (dump → enkripsi → dekripsi → restore → sanity check tabel inti) terhadap database dev sungguhan sebelum commit.
 
 ---
 
@@ -505,7 +507,7 @@ Antarmuka Filament: `https://rightclick.localhost:8443/admin` (sertifikat CA int
 | B6 | `.gitignore` memakai pola `.env.*` dengan pengecualian `.env.example` | ERP Arabica pernah membocorkan kredensial produksi lewat `.env.bak` yang tidak masuk daftar abaikan |
 | B7 | `worker` dibatasi 1 proses | H1 — i3-7100 hanya 2 core fisik |
 
-Service `backup` belum ada di `docker-compose.yml`; itu lingkup **T1.12**, dan T1.12 mengunci penyelesaian Fase 1.
+Service `backup` ditambahkan T1.12 — lihat §14 "Backup" untuk detail implementasi.
 
 ### Fondasi model (T1.3)
 

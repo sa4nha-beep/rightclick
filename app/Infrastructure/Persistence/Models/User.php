@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Persistence\Models;
 
 use App\Infrastructure\Persistence\Concerns\HasUuidV7;
-use Database\Factories\UserFactory;
+use Database\Factories\Infrastructure\Persistence\Models\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;

@@ -7,8 +7,10 @@ namespace Tests\Feature;
 use App\Application\Services\AuditService;
 use App\Domain\Shared\Enums\AuditAction;
 use App\Infrastructure\Persistence\Models\AuditLog;
+use App\Infrastructure\Persistence\Models\Branch;
 use App\Infrastructure\Persistence\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class AuditLogTest extends TestCase
@@ -26,12 +28,12 @@ class AuditLogTest extends TestCase
         parent::setUp();
 
         $this->auditService = app(AuditService::class);
-        $branch = \App\Infrastructure\Persistence\Models\Branch::factory()->create();
+        $branch = Branch::factory()->create();
         $this->actor = User::factory()->for($branch, 'defaultBranch')->create();
         $this->targetUser = User::factory()->for($branch, 'defaultBranch')->create();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function it_logs_access_denied_action(): void
     {
         $this->actingAs($this->actor);
@@ -53,7 +55,7 @@ class AuditLogTest extends TestCase
         $this->assertEquals($metadata, $log->metadata);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function it_creates_audit_log_with_created_at(): void
     {
         $this->actingAs($this->actor);
@@ -70,7 +72,7 @@ class AuditLogTest extends TestCase
         $this->assertIsNumeric($log->created_at->timestamp);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function it_stores_full_audit_context(): void
     {
         $this->actingAs($this->actor);
@@ -93,7 +95,7 @@ class AuditLogTest extends TestCase
         $this->assertEquals(['reason' => 'User requested change'], $log->metadata);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function it_records_different_action_types(): void
     {
         $this->actingAs($this->actor);
@@ -113,10 +115,10 @@ class AuditLogTest extends TestCase
         $this->assertEquals(AuditAction::AccessDenied, $logAccessDenied->action);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function it_can_query_audit_logs_by_actor(): void
     {
-        $otherActor = User::factory()->for(\App\Infrastructure\Persistence\Models\Branch::find($this->actor->default_branch_id), 'defaultBranch')->create();
+        $otherActor = User::factory()->for(Branch::find($this->actor->default_branch_id), 'defaultBranch')->create();
 
         $this->auditService->log($this->targetUser, AuditAction::Created, actorId: $this->actor->id);
         $this->auditService->log($this->targetUser, AuditAction::Updated, actorId: $otherActor->id);
