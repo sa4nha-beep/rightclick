@@ -328,7 +328,7 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 **Daftar lengkap: `HS-TASKS-RIGHTCLICK-v1.1`** — memuat rekomendasi model Claude per task (MD1–MD4).
 
-**Kemajuan:** T1.1–T1.7 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`). Task berikutnya: **T1.8** (trait `HasDocumentState` + `DocumentStateService`: draft → final → void).
+**Kemajuan:** T1.1–T1.8 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`, T1.8 trait `HasDocumentState` + `DocumentStateService` draft→final→void). Task berikutnya: **T1.9** (tabel `settings` + seeder ambang TH1–TH5c; `ApprovalService` + tabel `approvals`).
 
 ### Tiga simpul yang tidak boleh dilewati
 

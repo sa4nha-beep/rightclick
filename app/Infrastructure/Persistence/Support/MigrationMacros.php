@@ -54,5 +54,41 @@ final class MigrationMacros
 
             return $this;
         });
+
+        // R4 / DB Design §3 (`document_state`) / §4.x (mis. `sales.state`) —
+        // kolom siklus hidup dokumen yang dipasangkan dengan trait
+        // App\Infrastructure\Persistence\Concerns\HasDocumentState (T1.8).
+        // Dipakai tabel dokumen transaksi mulai T3.5 (opname), T4.3 (sales),
+        // T5.1 (purchase_orders), dst. — belum ada tabel nyata yang
+        // memakainya pada T1.8 sendiri.
+        Blueprint::macro('documentStateColumns', function (): Blueprint {
+            /** @var Blueprint $this */
+            $this->string('state', 20)->default('draft');
+            $this->timestampTz('finalized_at')->nullable();
+            $this->timestampTz('voided_at')->nullable();
+            $this->foreignUuid('voided_by')->nullable()->constrained('users')->restrictOnDelete();
+            $this->text('void_reason')->nullable();
+
+            return $this;
+        });
+    }
+
+    /**
+     * SQL mentah untuk constraint C7 (DB Design §7): "`state = 'void'`
+     * mensyaratkan `voided_at`, `voided_by`, `void_reason` terisi."
+     *
+     * Bukan macro Blueprint karena CHECK constraint lintas kolom dieksekusi
+     * setelah tabel dibuat, bukan di dalam closure `Schema::create`. Panggil
+     * lewat `DB::statement(...)` tepat setelah `Schema::create($table, ...)`
+     * pada migration yang memakai `documentStateColumns()`.
+     */
+    public static function documentStateVoidCheckSql(string $table): string
+    {
+        return sprintf(
+            'ALTER TABLE %s ADD CONSTRAINT %s_state_void_fields_check '.
+            'CHECK (state <> \'void\' OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL))',
+            $table,
+            $table,
+        );
     }
 }
