@@ -30,10 +30,17 @@ final class ApprovalService
      * Ajukan permintaan approval untuk sebuah dokumen. `$approvable` boleh
      * berupa model apa pun — layanan ini hanya membaca kelas morph dan
      * primary key-nya, tidak menyentuh kolom spesifik dokumennya.
+     *
+     * `$branchId` eksplisit dibutuhkan karena middleware yang mengisi
+     * `BranchContext` (dipakai `BelongsToBranch::bootBelongsToBranch()`
+     * untuk auto-fill `branch_id` saat `creating`) baru dibangun T2.5 —
+     * tanpa ini, `Approval::create()` gagal kolom NOT NULL `branch_id`.
+     * Default ke cabang aktif pengguna login bila tidak diberikan eksplisit.
      */
-    public function request(Model $approvable, ?string $requestedBy = null): Approval
+    public function request(Model $approvable, ?string $requestedBy = null, ?string $branchId = null): Approval
     {
         return Approval::create([
+            'branch_id' => $branchId ?? Auth::user()?->default_branch_id,
             'approvable_type' => $approvable->getMorphClass(),
             'approvable_id' => $approvable->getKey(),
             'requested_by' => $requestedBy ?? Auth::id(),

@@ -328,9 +328,26 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 **Daftar lengkap: `HS-TASKS-RIGHTCLICK-v1.1`** — memuat rekomendasi model Claude per task (MD1–MD4).
 
-**Kemajuan:** T1.1–T1.12 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`, T1.8 trait `HasDocumentState` + `DocumentStateService` draft→final→void, T1.9 tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals`, T1.10 tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif, T1.11 tabel `audit_logs` append-only + `AuditLog` model + `AuditService` + 5 test, T1.12 service `backup` — pg_dump harian + enkripsi + retensi 30/12/12 + off-site + uji restore bulanan, diverifikasi end-to-end). **Fase 1 (Platform & Access Control) selesai.** Fase berikutnya: **Fase 2 — Master Data**.
+**Kemajuan:**
+
+| ID | Status | Catatan |
+|---|---|---|
+| T1.1–T1.5 | ✅ Selesai | Bootstrap, CI, fondasi model, identity tables, spatie permission + 58 permission/5 peran |
+| T1.6 | ✅ Selesai | `AuditLogService` (`AuditService`) + tabel `audit_logs` append-only + trait `Auditable` (observer otomatis, diterapkan pada `Setting` dan `Approval`) |
+| T1.7 | ✅ Selesai | `DocumentNumberService` + `document_sequences`, `SELECT ... FOR UPDATE` |
+| T1.8 | ✅ Selesai | Trait `HasDocumentState` + `DocumentStateService`, draft→final→void |
+| T1.9 | ✅ Selesai | Tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals` |
+| T1.10 | ⚠️ Sebagian | Tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif sudah ada. **Belum**: 6 aset logo SVG (sudah ada filenya di `resources/images/brand/`, belum disambung ke `AdminPanelProvider`) |
+| T1.11 | ❌ Belum dikerjakan | Halaman login sesuai HS-UI §2.6 + banner "Terputus dari pusat" |
+| T1.12 | ✅ Selesai | Service `backup` — pg_dump harian + enkripsi + retensi 30/12/12 + off-site + uji restore bulanan, diverifikasi end-to-end |
+| T1.13 | ❌ Belum dikerjakan | Pengujian otorisasi negatif PT1–PT16 |
+| T1.14 | ❌ Belum dikerjakan | Halaman Audit Log + Pengaturan di Filament (backend T1.6/T1.9 sudah siap dipakai) |
+
+**Fase 1 BELUM selesai** — dokumen tugas eksplisit: *"Fase 1 tidak dinyatakan selesai sebelum T1.12 dan T1.13 lulus."* T1.13 belum ada. Urutan pengerjaan sisa gap: T1.10 (logo) → T1.11 (login) → T1.13 (PT1–16) → T1.14 (halaman Filament).
 
 > **Catatan T1.9 (diselesaikan):** permission baru T1.9 memakai gaya `snake_case` mengikuti `PermissionSeeder` yang sudah ada, bukan notasi titik `HS-PERM-RIGHTCLICK-v1.1`. Ketidaksesuaian ini direkonsiliasi dengan menerbitkan `HS-PERM-RIGHTCLICK-v1.2` (revisi penamaan mengikuti kode, status Draft menunggu approval COO) — lihat §17.
+>
+> **Catatan koreksi label (penting):** sesi-sesi sebelumnya menandai task T1.6/T1.10/T1.11/T1.13/T1.14 tanpa membaca `HS-TASKS-RIGHTCLICK-v1.1` secara langsung — hanya menebak dari daftar modul umum di §3. Akibatnya pekerjaan yang sebelumnya diberi label "T1.11" (tabel `audit_logs`, `AuditLog` model, `AuditService`) sebenarnya adalah isi **T1.6** — sudah dikoreksi di tabel atas. Pekerjaan yang sebelumnya diberi label "T1.6" (Policy Branch/User/UserBranch) adalah bagian dari cakupan **T1.5** (architecture test Policy-per-model), bukan tugas terpisah — tidak ada kode yang perlu diubah, hanya labelnya yang salah. Tidak ada pekerjaan yang hilang, hanya penomoran yang perlu dibaca ulang terhadap dokumen asli sebelum melanjutkan task berikutnya.
 
 ### Tiga simpul yang tidak boleh dilewati
 

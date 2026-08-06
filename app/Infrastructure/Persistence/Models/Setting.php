@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Models;
 
+use App\Infrastructure\Persistence\Concerns\Auditable;
 use App\Infrastructure\Persistence\Concerns\HasUuidV7;
 use Illuminate\Database\Eloquent\Model;
 
@@ -15,9 +16,13 @@ use Illuminate\Database\Eloquent\Model;
  * REPLICATED (CLAUDE.md §7) — global per `key`, bukan branch-scoped (tidak
  * ada `branch_id`); `SettingPolicy` menegakkan HQ sebagai satu-satunya
  * penulis.
+ *
+ * `Auditable` (T1.6): perubahan ambang WAJIB tercatat di audit log (TA10 —
+ * "perubahan ambang memerlukan setting.manage dan tercatat di audit log").
  */
 class Setting extends Model
 {
+    use Auditable;
     use HasUuidV7;
 
     protected $fillable = [

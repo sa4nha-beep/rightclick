@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Persistence\Models;
 
 use App\Domain\Shared\Enums\ApprovalStatus;
+use App\Infrastructure\Persistence\Concerns\Auditable;
 use App\Infrastructure\Persistence\Concerns\BelongsToBranch;
 use App\Infrastructure\Persistence\Concerns\HasUuidV7;
 use Illuminate\Database\Eloquent\Model;
@@ -21,9 +22,14 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * `created_by`/`updated_by` generik. Tidak memakai soft delete: DB Design
  * §4.1 tidak mencantumkan `deleted_at` untuk tabel ini — keputusan approval
  * adalah jejak permanen, sama rasionalnya dengan `audit_logs`.
+ *
+ * `Auditable` (T1.6): permintaan, persetujuan, dan penolakan approval adalah
+ * "aksi sensitif" per R11 — dicatat otomatis, bukan lewat panggilan manual
+ * tersebar di `ApprovalService`.
  */
 class Approval extends Model
 {
+    use Auditable;
     use BelongsToBranch;
     use HasUuidV7;
 
