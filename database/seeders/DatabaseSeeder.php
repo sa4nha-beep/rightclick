@@ -15,8 +15,8 @@ class DatabaseSeeder extends Seeder
      *   3. users (akun Owner awal)
      *   user_branches (asosiasi Owner ke semua tiga cabang)
      *
-     * Fase 2 (roles + permissions) adalah T1.5 — akan memanggil
-     * `$this->call(PermissionSeeder::class)`.
+     * Fase 2 (roles + permissions, T1.5) memanggil `PermissionSeeder`.
+     * Fase 3 (nilai ambang TH1–TH5c, T1.9) memanggil `SettingSeeder`.
      */
     public function run(): void
     {
@@ -76,5 +76,8 @@ class DatabaseSeeder extends Seeder
         if (! $owner->hasRole('owner')) {
             $owner->assignRole('owner');
         }
+
+        // T1.9 — nilai ambang TH1–TH5c
+        $this->call(SettingSeeder::class);
     }
 }

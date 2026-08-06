@@ -98,6 +98,11 @@ class PermissionSeeder extends Seeder
             'view_receivables',
             'view_payables',
             'manage_financial_settings',
+
+            // Platform — Settings & Approvals (3, T1.9)
+            'manage_settings',
+            'request_approval',
+            'decide_approval',
         ];
 
         // Create all permissions
@@ -117,13 +122,20 @@ class PermissionSeeder extends Seeder
         // Owner — semua permission
         $owner->syncPermissions($permissions);
 
-        // Admin — semua kecuali delete/manage
+        // Admin — semua kecuali delete/manage. `manage_settings` dikecualikan
+        // secara eksplisit: HS-PERM-RIGHTCLICK-v1.1 §3.1 — Owner satu-satunya
+        // yang boleh mengubah ambang (TA10). `decide_approval` tetap dimiliki
+        // Admin ("⚠️ terbatas" pada matriks — batasan nilai ambang ditegakkan
+        // per modul di T2.7/T3.6/T5.1, bukan lewat permission ini).
         $adminPermissions = array_filter($permissions, function ($p) {
-            return ! str_contains($p, 'delete_') && ! str_contains($p, 'manage_emergency');
+            return ! str_contains($p, 'delete_')
+                && ! str_contains($p, 'manage_emergency')
+                && $p !== 'manage_settings';
         });
         $admin->syncPermissions($adminPermissions);
 
-        // Kasir — sales operations saja
+        // Kasir — sales operations saja. `request_approval` (diskon di atas
+        // TH1 tetap tersimpan sebagai draf menunggu approval, AP-01).
         $kasirPermissions = [
             'view_sales',
             'create_sale',
@@ -133,10 +145,12 @@ class PermissionSeeder extends Seeder
             'view_cashier_shift',
             'view_products',
             'view_stock',
+            'request_approval',
         ];
         $kasir->syncPermissions($kasirPermissions);
 
-        // Gudang — inventory operations saja
+        // Gudang — inventory operations saja. `request_approval` (penyesuaian
+        // di atas TH3 tetap tersimpan menunggu approval).
         $gudangPermissions = [
             'view_stock',
             'view_batches',
@@ -149,6 +163,7 @@ class PermissionSeeder extends Seeder
             'view_transfer_history',
             'manage_serial_numbers',
             'view_partners',
+            'request_approval',
         ];
         $gudang->syncPermissions($gudangPermissions);
 

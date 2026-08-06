@@ -91,4 +91,20 @@ final class MigrationMacros
             $table,
         );
     }
+
+    /**
+     * SQL mentah untuk `approvals` (T1.9, AP-04 — PRD §12.2): "Penolakan
+     * wajib disertai alasan yang terlihat oleh pemohon." Sama polanya
+     * dengan `documentStateVoidCheckSql()` — pasangan status dan kolom
+     * wajibnya, ditegakkan di database, bukan hanya di `ApprovalService`.
+     */
+    public static function approvalRejectionReasonCheckSql(string $table): string
+    {
+        return sprintf(
+            'ALTER TABLE %s ADD CONSTRAINT %s_rejection_reason_check '.
+            "CHECK (status <> 'rejected' OR reason IS NOT NULL)",
+            $table,
+            $table,
+        );
+    }
 }
