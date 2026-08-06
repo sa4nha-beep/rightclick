@@ -330,7 +330,7 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 **Kemajuan:** T1.1–T1.9 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`, T1.8 trait `HasDocumentState` + `DocumentStateService` draft→final→void, T1.9 tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals`). Task berikutnya: **T1.10** (tema Filament: token warna, Inter lokal, sidebar, dark mode nonaktif).
 
-> **Catatan T1.9:** permission baru (`manage_settings`, `request_approval`, `decide_approval`) memakai gaya `snake_case` mengikuti `PermissionSeeder` yang sudah ada, BUKAN notasi titik (`setting.manage`, dst.) dari `HS-PERM-RIGHTCLICK-v1.1`. Seluruh 62 permission T1.5 sudah lebih dulu menyimpang dari penamaan dokumen tersebut — penyesuaian nama menyeluruh belum dilakukan, lihat temuan terpisah.
+> **Catatan T1.9 (diselesaikan):** permission baru T1.9 memakai gaya `snake_case` mengikuti `PermissionSeeder` yang sudah ada, bukan notasi titik `HS-PERM-RIGHTCLICK-v1.1`. Ketidaksesuaian ini direkonsiliasi dengan menerbitkan `HS-PERM-RIGHTCLICK-v1.2` (revisi penamaan mengikuti kode, status Draft menunggu approval COO) — lihat §17.
 
 ### Tiga simpul yang tidak boleh dilewati
 
@@ -464,7 +464,7 @@ Seluruhnya di `FOUNDER MODE/04_PROJECTS/ACTIVE/HS-RIGHTCLICK/01_DOCS/`
 | System Architecture | 1.1 | Final |
 | Database Design | 1.0 | Final |
 | API Specification | 1.0 | Final |
-| Permission Matrix | 1.1 | Final |
+| Permission Matrix | 1.2 | Draft — menunggu approval COO (revisi penamaan dari v1.1 Final, lihat HS-PERM-RIGHTCLICK-v1.2 §"Mengapa Versi Ini Ada") |
 | UI Requirements | 1.1 | Final |
 | Development Tasks | 1.1 | Final |
 | Brand Identity Guidelines | 1.0 | Final |
