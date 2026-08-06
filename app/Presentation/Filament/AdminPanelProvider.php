@@ -11,6 +11,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Colors\Color;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -40,6 +41,14 @@ class AdminPanelProvider extends PanelProvider
             // Dark mode dinonaktifkan — Brand Identity menetapkan proporsi
             // 60% putih / 30% hitam / 10% cyan (T1.10, HS-UI bagian 2.1).
             ->darkMode(false)
+            // Brand HAEN KOMPUTER: warna cyan (#00B4D4) sebagai primary
+            ->colors([
+                'primary' => Color::hex('#00B4D4'),
+                'danger' => Color::hex('#DC2626'),
+                'warning' => Color::hex('#D97706'),
+                'success' => Color::hex('#0E9F6E'),
+                'info' => Color::hex('#00B4D4'),
+            ])
             ->discoverResources(
                 in: app_path('Presentation/Filament/Resources'),
                 for: 'App\Presentation\Filament\Resources',

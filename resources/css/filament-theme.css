@@ -1,0 +1,278 @@
+/*
+  Filament Panel Theme — HAEN KOMPUTER Brand Identity
+  ====================================================================
+
+  HS-UI-RIGHTCLICK-v1.1 Bagian 2 — Warna, proporsi, dan kontras.
+
+  Prinsip:
+  • 60% putih (latar dominan), 30% hitam (teks/sidebar), 10% cyan (aksen)
+  • Cyan hanya untuk tombol aksi, tautan, penanda aktif — BUKAN latar umum
+  • Kontras teks cyan (#00B4D4) pada putih dilarang untuk isi (rasio hanya 2,6:1)
+  • Font Inter dimuat lokal, tidak dari CDN (R13 / UT15)
+  • Dark mode dinonaktifkan
+  • Tanpa transisi pada POS (PV7) — lihat pos-theme.css terpisah
+
+  Scope: Filament back office (admin panel) saja. POS adalah Livewire terpisah
+  (App\Presentation\Pos, HS-ARCH-RIGHTCLICK-v1.1 bagian 2.2).
+*/
+
+@import './fonts.css';
+
+:root {
+  /* Reiterasikan token yang sudah ada di fonts.css untuk kelengkapan */
+  --font-sans: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+
+  /* Filament-specific overrides: warna brand */
+  --primary: #00B4D4;
+  --primary-hover: #0099B5;
+  --primary-light: #E6F7FB;
+  --primary-dark: #007A8F;
+
+  --secondary: #1A1A1A;
+  --secondary-light: #F5F5F5;
+
+  --gray-50: #FFFFFF;
+  --gray-100: #F5F5F5;
+  --gray-200: #E6E6E6;
+  --gray-300: #D4D4D4;
+  --gray-400: #999999;
+  --gray-500: #808080;
+  --gray-600: #666666;
+  --gray-700: #4D4D4D;
+  --gray-800: #1A1A1A;
+  --gray-900: #000000;
+
+  --danger: #DC2626;
+  --warning: #D97706;
+  --success: #0E9F6E;
+  --info: #00B4D4;
+}
+
+/*
+ * Global: Font dan text rendering
+ */
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * Filament Panel: Sidebar dan header
+ * Sidebar: latar hitam (30%), teks putih
+ * Header: latar putih (60%), teks hitam, garis bawah subtle
+ */
+.fi-topbar {
+  @apply bg-white border-b border-gray-200;
+}
+
+.fi-sidebar {
+  @apply bg-black;
+}
+
+.fi-sidebar-item {
+  @apply text-white;
+}
+
+.fi-sidebar-item.fi-active {
+  @apply bg-cyan text-white;
+  background-color: var(--haen-cyan);
+}
+
+.fi-sidebar-item:hover {
+  @apply bg-gray-900 text-white;
+}
+
+/*
+ * Filament Buttons: Cyan untuk aksi utama, putih untuk sekunder
+ * Jangan gunakan cyan pada latar (P7 — hanya warna aksi)
+ */
+.fi-btn {
+  @apply font-medium transition-colors duration-200;
+}
+
+.fi-btn-primary {
+  @apply bg-cyan text-white hover:bg-cyan-hover;
+  background-color: var(--haen-cyan);
+}
+
+.fi-btn-primary:hover {
+  background-color: var(--haen-cyan-hover);
+}
+
+.fi-btn-secondary {
+  @apply bg-gray-100 text-black hover:bg-gray-200;
+}
+
+.fi-btn-tertiary {
+  @apply text-gray-700 hover:bg-gray-100;
+}
+
+/*
+ * Filament Forms: Input, select, textarea
+ * Latar putih, border subtle, fokus dengan garis cyan
+ */
+.fi-input,
+.fi-textarea,
+.fi-select {
+  @apply bg-white border border-gray-300;
+}
+
+.fi-input:focus,
+.fi-textarea:focus,
+.fi-select:focus {
+  @apply border-cyan ring-1;
+  border-color: var(--haen-cyan);
+  --tw-ring-color: var(--haen-cyan);
+}
+
+/*
+ * Filament Tables: Stripe alternating, header hitam
+ * Header: latar hitam, teks putih (kontras 7:1, aman)
+ * Baris: putih pada genap, subtle gray pada ganjil
+ */
+.fi-table-head {
+  @apply bg-black;
+}
+
+.fi-table-head th {
+  @apply text-white font-semibold;
+}
+
+.fi-table-body tr:nth-child(odd) td {
+  @apply bg-gray-50;
+}
+
+.fi-table-body tr:nth-child(even) td {
+  @apply bg-white;
+}
+
+.fi-table-body tr:hover td {
+  @apply bg-gray-100;
+}
+
+/*
+ * Filament Cards dan Layout
+ * Latar putih, border subtle, shadow minimal
+ */
+.fi-card {
+  @apply bg-white border border-gray-200 shadow-sm;
+}
+
+/*
+ * Filament Badges: Warna semantik saja (status), BUKAN cyan
+ * Success: hijau, Warning: amber, Danger: merah, Neutral: abu
+ * (P7 — semantic colors hanya untuk lencana status dan ikon)
+ */
+.fi-badge-success {
+  @apply bg-green-100 text-green-800;
+  background-color: rgba(14, 159, 110, 0.1);
+  color: var(--state-success);
+}
+
+.fi-badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+  background-color: rgba(217, 119, 6, 0.1);
+  color: var(--state-warning);
+}
+
+.fi-badge-danger {
+  @apply bg-red-100 text-red-800;
+  background-color: rgba(220, 38, 38, 0.1);
+  color: var(--state-danger);
+}
+
+.fi-badge-neutral {
+  @apply bg-gray-100 text-gray-700;
+}
+
+/*
+ * Filament Links: Cyan dengan underline saat hover
+ * Kontras: teks cyan pada putih hanya boleh untuk tautan ≥16px dengan underline
+ */
+a {
+  @apply text-cyan hover:underline;
+  color: var(--haen-cyan);
+}
+
+.fi-link-danger {
+  @apply text-danger hover:underline;
+}
+
+/*
+ * Filament Tabs
+ * Tab aktif: garis bawah cyan, teks hitam
+ * Tab tidak aktif: teks abu
+ */
+.fi-tabs-tab {
+  @apply text-gray-600 hover:text-gray-900;
+}
+
+.fi-tabs-tab.fi-active {
+  @apply text-black border-b-2;
+  border-color: var(--haen-cyan);
+}
+
+/*
+ * Filament Modal: Backdrop gelap, konten putih
+ */
+.fi-modal-backdrop {
+  @apply bg-black/50;
+}
+
+.fi-modal {
+  @apply bg-white;
+}
+
+/*
+ * Filament Notifications: Kontras tinggi, tidak menggunakan cyan
+ */
+.fi-notification-success {
+  @apply bg-green-50 border-l-4;
+  border-color: var(--state-success);
+}
+
+.fi-notification-warning {
+  @apply bg-yellow-50 border-l-4;
+  border-color: var(--state-warning);
+}
+
+.fi-notification-danger {
+  @apply bg-red-50 border-l-4;
+  border-color: var(--state-danger);
+}
+
+.fi-notification-info {
+  @apply bg-blue-50 border-l-4;
+  border-color: var(--haen-cyan);
+}
+
+/*
+ * Print media: memastikan warna tetap konsisten saat print
+ * Nota penjualan (§12 / POS) tidak boleh memiliki baris PPN
+ * (NT-05, PV7 — dihandle terpisah di pos-theme.css)
+ */
+@media print {
+  * {
+    background: transparent !important;
+    color: black !important;
+  }
+
+  .fi-sidebar,
+  .fi-topbar,
+  .fi-modal-backdrop {
+    display: none !important;
+  }
+}
+
+/*
+ * Accessible focus states — penting untuk WCAG A11y
+ */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  @apply outline-2 outline-offset-2;
+  outline-color: var(--haen-cyan);
+}
