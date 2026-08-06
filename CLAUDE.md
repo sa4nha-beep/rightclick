@@ -328,7 +328,7 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 **Daftar lengkap: `HS-TASKS-RIGHTCLICK-v1.1`** — memuat rekomendasi model Claude per task (MD1–MD4).
 
-**Kemajuan:** T1.1–T1.10 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`, T1.8 trait `HasDocumentState` + `DocumentStateService` draft→final→void, T1.9 tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals`, T1.10 tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif). Task berikutnya: **T1.11** (audit log table + AuditService).
+**Kemajuan:** T1.1–T1.11 selesai (T1.4 identity tables/models/seeder, T1.5 authorization framework spatie, T1.6 model policies Branch/User/UserBranch, T1.7 `DocumentNumberService` + `document_sequences`, T1.8 trait `HasDocumentState` + `DocumentStateService` draft→final→void, T1.9 tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals`, T1.10 tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif, T1.11 tabel `audit_logs` append-only + `AuditLog` model + `AuditService` + 5 test). Task berikutnya: **T1.12** (backup layer, completing Fase 1 Platform & Access Control).
 
 > **Catatan T1.9 (diselesaikan):** permission baru T1.9 memakai gaya `snake_case` mengikuti `PermissionSeeder` yang sudah ada, bukan notasi titik `HS-PERM-RIGHTCLICK-v1.1`. Ketidaksesuaian ini direkonsiliasi dengan menerbitkan `HS-PERM-RIGHTCLICK-v1.2` (revisi penamaan mengikuti kode, status Draft menunggu approval COO) — lihat §17.
 
