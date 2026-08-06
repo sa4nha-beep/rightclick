@@ -7,11 +7,16 @@ declare(strict_types=1);
  *
  * Tampilan panel (tema merek, Inter lokal, sidebar hitam) adalah T1.10;
  * di sini yang diuji hanya bahwa panel terpasang dan terjangkau.
+ *
+ * Teks "HAEN KOMPUTER" (bukan "RIGHTCLICK") sengaja diuji: RIGHTCLICK adalah
+ * nama proyek internal (CLAUDE.md §1), sedangkan HAEN KOMPUTER adalah brand
+ * yang tampil ke pengguna akhir — dikonfirmasi lewat `->brandName()` di
+ * AdminPanelProvider (T1.10).
  */
 it('menyajikan halaman login panel admin', function () {
     $this->get('/admin/login')
         ->assertOk()
-        ->assertSee('RIGHTCLICK', escape: false);
+        ->assertSee('HAEN KOMPUTER', escape: false);
 });
 
 it('mengalihkan panel admin ke login saat belum terautentikasi', function () {

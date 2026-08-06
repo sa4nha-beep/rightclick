@@ -1,0 +1,28 @@
+/*
+  RIGHTCLICK — entry point tema panel Filament "admin".
+  ====================================================================
+
+  Titik masuk resmi Filament untuk kustomisasi tema per panel (dibangkitkan
+  oleh `php artisan make:filament-theme`, T1.10). Dimuat lewat
+  `->viteTheme()` di `AdminPanelProvider`, TERPISAH dari `resources/css/app.css`
+  (entry Vite default Laravel, tidak dipakai panel Filament sama sekali —
+  tanpa `->viteTheme()`, filament-theme.css tidak pernah termuat browser
+  meski kodenya ada; ditemukan T1.10).
+
+  Urutan import penting:
+  1. Filament base theme.css — Tailwind + seluruh komponen resmi Filament
+     (button, table, form, dst.), dan variabel warna --primary-N / --gray-N
+     yang diisi runtime dari `->colors()` di AdminPanelProvider.
+  2. fonts.css — Inter lokal + design token warna HAEN.
+  3. filament-theme.css — override brand HAEN KOMPUTER (sidebar hitam, logo,
+     kontras) DI ATAS tema resmi Filament — bukan pengganti keseluruhan.
+
+  Path relatif dihitung dari lokasi berkas ini
+  (resources/css/filament/admin/theme.css).
+*/
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+@import '../../../fonts/fonts.css';
+@import '../../filament-theme.css';
+
+@source '../../../../app/Presentation/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';

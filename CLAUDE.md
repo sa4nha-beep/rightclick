@@ -337,11 +337,13 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 | T1.7 | ✅ Selesai | `DocumentNumberService` + `document_sequences`, `SELECT ... FOR UPDATE` |
 | T1.8 | ✅ Selesai | Trait `HasDocumentState` + `DocumentStateService`, draft→final→void |
 | T1.9 | ✅ Selesai | Tabel `settings` + seeder ambang TH1–TH5c + `ApprovalService`/tabel `approvals` |
-| T1.10 | ⚠️ Sebagian | Tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif sudah ada. **Belum**: 6 aset logo SVG (sudah ada filenya di `resources/images/brand/`, belum disambung ke `AdminPanelProvider`) |
+| T1.10 | ✅ Selesai | Tema Filament: warna HAEN brand + Inter lokal + sidebar hitam + dark mode nonaktif + 6 varian logo SVG tersambung (login/topbar: Primary Horizontal, sidebar: Reverse, favicon: Badge/Avatar) via `->viteTheme()` + `->brandLogo()`. NV3 (logo→Wordmark Only saat sidebar diciutkan) sengaja ditunda, lihat catatan di `AdminPanelProvider` |
 | T1.11 | ❌ Belum dikerjakan | Halaman login sesuai HS-UI §2.6 + banner "Terputus dari pusat" |
 | T1.12 | ✅ Selesai | Service `backup` — pg_dump harian + enkripsi + retensi 30/12/12 + off-site + uji restore bulanan, diverifikasi end-to-end |
 | T1.13 | ❌ Belum dikerjakan | Pengujian otorisasi negatif PT1–PT16 |
 | T1.14 | ❌ Belum dikerjakan | Halaman Audit Log + Pengaturan di Filament (backend T1.6/T1.9 sudah siap dipakai) |
+
+> **Catatan T1.10 (penting untuk task Filament berikutnya):** panel Filament TIDAK memakai `resources/css/app.css` (entry Vite default Laravel) sama sekali — ia butuh entry terpisah didaftarkan lewat `->viteTheme()`, di sini `resources/css/filament/admin/theme.css`. Tanpa `->viteTheme()`, CSS kustom apa pun di `filament-theme.css` DIAM-DIAM tidak pernah dimuat browser (tidak ada error, panel terlihat "normal" memakai tema bawaan Filament) — bug ini sempat lolos tanpa terdeteksi karena verifikasi sebelumnya hanya PHPStan/Pint/test PHP, tidak pernah `npm run build` maupun cek browser sungguhan. Dua bug tambahan yang ditemukan saat memperbaiki ini: (1) `@apply bg-cyan`/`text-cyan`/`border-cyan` bukan utility Tailwind valid — token warna kustom (`--haen-cyan`) harus dipakai lewat CSS biasa (`background-color: var(--haen-cyan)`), bukan `@apply`; (2) komentar CSS yang memuat teks berisi urutan karakter `*/` (mis. `--primary-*/--gray-*`) menutup komentar C-style secara prematur dan merusak parsing file — hindari `*/` literal di dalam teks komentar CSS.
 
 **Fase 1 BELUM selesai** — dokumen tugas eksplisit: *"Fase 1 tidak dinyatakan selesai sebelum T1.12 dan T1.13 lulus."* T1.13 belum ada. Urutan pengerjaan sisa gap: T1.10 (logo) → T1.11 (login) → T1.13 (PT1–16) → T1.14 (halaman Filament).
 

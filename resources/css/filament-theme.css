@@ -16,7 +16,7 @@
   (App\Presentation\Pos, HS-ARCH-RIGHTCLICK-v1.1 bagian 2.2).
 */
 
-@import './fonts.css';
+@import '../fonts/fonts.css';
 
 :root {
   /* Reiterasikan token yang sudah ada di fonts.css untuk kelengkapan */
@@ -75,12 +75,42 @@ html {
 }
 
 .fi-sidebar-item.fi-active {
-  @apply bg-cyan text-white;
+  @apply text-white;
   background-color: var(--haen-cyan);
 }
 
 .fi-sidebar-item:hover {
   @apply bg-gray-900 text-white;
+}
+
+/*
+ * Logo (T1.10, HS-UI §5) — AdminPanelProvider::brandLogoHtml() merender
+ * kedua varian (Primary Horizontal + Reverse) sekaligus di setiap tempat
+ * `<x-filament-panels::logo>` dipakai; CSS di sini yang memilih mana
+ * tampil, berdasarkan latar tiap konteks. Tidak ada warna SVG yang diubah
+ * (LG2) — hanya visibilitas file yang sudah jadi yang dipilih.
+ */
+.rc-brand-logo {
+  display: none;
+}
+
+/* Sidebar (latar hitam) → varian 1 Reverse, lebar 200px (HS-UI §5) */
+.fi-sidebar-header-logo-ctn .rc-brand-logo-reverse {
+  display: block;
+  width: 200px;
+  height: auto;
+}
+
+/* Login / halaman "simple" dan topbar (latar putih) → varian 1 Primary Horizontal */
+.fi-simple-header .rc-brand-logo-primary,
+.fi-topbar .rc-brand-logo-primary {
+  display: block;
+  width: 260px;
+  height: auto;
+}
+
+.fi-topbar .rc-brand-logo-primary {
+  width: 160px; /* topbar lebih ringkas dari header login penuh */
 }
 
 /*
@@ -92,7 +122,7 @@ html {
 }
 
 .fi-btn-primary {
-  @apply bg-cyan text-white hover:bg-cyan-hover;
+  @apply text-white;
   background-color: var(--haen-cyan);
 }
 
@@ -121,9 +151,8 @@ html {
 .fi-input:focus,
 .fi-textarea:focus,
 .fi-select:focus {
-  @apply border-cyan ring-1;
   border-color: var(--haen-cyan);
-  --tw-ring-color: var(--haen-cyan);
+  box-shadow: 0 0 0 1px var(--haen-cyan);
 }
 
 /*
@@ -191,12 +220,13 @@ html {
  * Kontras: teks cyan pada putih hanya boleh untuk tautan ≥16px dengan underline
  */
 a {
-  @apply text-cyan hover:underline;
+  @apply hover:underline;
   color: var(--haen-cyan);
 }
 
 .fi-link-danger {
-  @apply text-danger hover:underline;
+  @apply hover:underline;
+  color: var(--danger);
 }
 
 /*
