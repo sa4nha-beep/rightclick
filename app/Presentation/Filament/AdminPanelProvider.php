@@ -126,6 +126,16 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->authMiddleware([
+                // PT10 (HS-PERM-RIGHTCLICK-v1.2 §7 — akun nonaktif ditolak
+                // pada permintaan berikutnya, sesi diakhiri) ditegakkan di
+                // dalam `User::canAccessPanel()`, dipanggil `Authenticate`
+                // di bawah — BUKAN lewat middleware kustom terpisah yang
+                // ditaruh sebelum kelas ini. Percobaan menaruh pemeriksaan
+                // di middleware sendiri sebelum `Authenticate::class`
+                // terbukti tidak konsisten terpanggil pada jalur permintaan
+                // Livewire full-page Filament; `canAccessPanel()` terbukti
+                // SELALU dipanggil tepat sebelum keputusan izin, sehingga
+                // itulah titik yang dipakai untuk logout + invalidate sesi.
                 Authenticate::class,
             ]);
     }
