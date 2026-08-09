@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Presentation\Filament;
 
+use App\Presentation\Filament\Auth\Login;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -76,7 +77,9 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            // Kustom (T1.11): login memakai `username`, bukan `email` (lihat
+            // dokblok App\Presentation\Filament\Auth\Login).
+            ->login(Login::class)
             // Dark mode dinonaktifkan — Brand Identity menetapkan proporsi
             // 60% putih / 30% hitam / 10% cyan (T1.10, HS-UI bagian 2.1).
             ->darkMode(false)

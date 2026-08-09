@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/bootstrap.php"
          colors="true"
 >
     <testsuites>
@@ -21,11 +21,25 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
-        <env name="CACHE_STORE" value="array"/>
+        <!--
+            force="true" WAJIB pada setiap baris di bawah. Tanpanya, PHPUnit
+            tidak menimpa environment variable yang sudah ada di proses induk
+            — dan docker-compose.yml men-set APP_ENV/DB_DATABASE/dst. dari
+            .env (env_file) di level container SEBELUM PHPUnit sempat
+            berjalan. Akibatnya (ditemukan T1.11): seluruh test suite diam-
+            diam berjalan di atas database `rightclick` (dev), BUKAN
+            `rightclick_testing` — bertahun-tahun tanpa error karena
+            RefreshDatabase membungkus tiap test dalam transaksi yang
+            di-rollback, tapi tetap melanggar B3 (CLAUDE.md §18) dan
+            membuat helper yang memeriksa app()->runningUnitTests() (dipakai
+            Filament untuk testing form) selalu bernilai false karena
+            APP_ENV terbaca "local", bukan "testing".
+        -->
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
 
         <!--
             Pengujian berjalan di atas PostgreSQL 16, bukan SQLite.
@@ -34,15 +48,15 @@
             (DB Design C1-C15, R6, R7). SQLite akan meloloskan pelanggaran
             yang ditolak produksi.
         -->
-        <env name="DB_CONNECTION" value="pgsql"/>
-        <env name="DB_DATABASE" value="rightclick_testing"/>
-        <env name="DB_URL" value=""/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_DATABASE" value="rightclick_testing" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
 
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="PULSE_ENABLED" value="false"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-        <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
     </php>
 </phpunit>
