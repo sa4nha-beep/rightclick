@@ -10,27 +10,24 @@ use App\Infrastructure\Persistence\Models\User;
 /**
  * Audit log: read-only jejak permanen (R11, P1).
  *
- * Tidak ada permission `view_audit_logs` di T1.5/T1.9 (baru direncanakan T1.14).
- * Sebelum itu, akses ke audit log masih terbatas internal (logging aksi sendiri,
- * pengecekan access_denied saat rejection, dst.) tanpa UI publik.
+ * `view_audit_logs` (Owner, Admin terbatas cabangnya via BranchScope pada
+ * model AuditLog) dan `export_audit_logs` (Owner saja) diseed T1.14 —
+ * HS-PERM-RIGHTCLICK-v1.2 §3.1/§4.1.
  *
- * Policy ini wajib ada (P4 — architecture test mewajibkan policy per model),
- * tetapi semua aksi selalu false sampai permission `view_audit_logs` tersedia.
- *
- * Update/delete SELALU false, termasuk untuk Owner (P1).
+ * update/delete/forceDelete SELALU false tanpa syarat, tidak bergantung
+ * permission apa pun — P1: "Tidak ada peran yang dapat update atau delete
+ * audit_logs, termasuk Owner". Diuji T1.13 (PT6).
  */
 class AuditLogPolicy
 {
     public function viewAny(User $user): bool
     {
-        // Placeholder: true hanya jika view_audit_logs permission ada (direncanakan T1.14)
-        // Saat ini: false — audit log bukan untuk UI publik di Fase 1
-        return false;
+        return $user->can('view_audit_logs');
     }
 
     public function view(User $user, AuditLog $auditLog): bool
     {
-        return false;
+        return $user->can('view_audit_logs');
     }
 
     public function create(User $user): bool

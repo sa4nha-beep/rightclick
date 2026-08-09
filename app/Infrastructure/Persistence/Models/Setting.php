@@ -19,6 +19,11 @@ use Illuminate\Database\Eloquent\Model;
  *
  * `Auditable` (T1.6): perubahan ambang WAJIB tercatat di audit log (TA10 —
  * "perubahan ambang memerlukan setting.manage dan tercatat di audit log").
+ *
+ * @property int|float|bool|string|null $value Cast 'array' menyimpan
+ *                                             skalar JSON apa pun (T1.14 — Larastan tanpa anotasi ini menyimpulkan
+ *                                             `string` dari cast 'array' secara keliru, menandai `is_bool($v)` di
+ *                                             SettingForm sebagai "selalu false").
  */
 class Setting extends Model
 {

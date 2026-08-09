@@ -103,6 +103,10 @@ class PermissionSeeder extends Seeder
             'manage_settings',
             'request_approval',
             'decide_approval',
+
+            // Platform — Audit Log (2, T1.14)
+            'view_audit_logs',
+            'export_audit_logs',
         ];
 
         // Create all permissions
@@ -123,14 +127,18 @@ class PermissionSeeder extends Seeder
         $owner->syncPermissions($permissions);
 
         // Admin — semua kecuali delete/manage. `manage_settings` dikecualikan
-        // secara eksplisit: HS-PERM-RIGHTCLICK-v1.1 §3.1 — Owner satu-satunya
+        // secara eksplisit: HS-PERM-RIGHTCLICK-v1.2 §4.1 — Owner satu-satunya
         // yang boleh mengubah ambang (TA10). `decide_approval` tetap dimiliki
         // Admin ("⚠️ terbatas" pada matriks — batasan nilai ambang ditegakkan
         // per modul di T2.7/T3.6/T5.1, bukan lewat permission ini).
+        // `view_audit_logs` diberikan (matriks: "⚠️ cabangnya" — BranchScope
+        // pada model AuditLog otomatis membatasi ke cabang Admin sendiri,
+        // T1.6). `export_audit_logs` dikecualikan — Owner saja (matriks §4.1).
         $adminPermissions = array_filter($permissions, function ($p) {
             return ! str_contains($p, 'delete_')
                 && ! str_contains($p, 'manage_emergency')
-                && $p !== 'manage_settings';
+                && $p !== 'manage_settings'
+                && $p !== 'export_audit_logs';
         });
         $admin->syncPermissions($adminPermissions);
 

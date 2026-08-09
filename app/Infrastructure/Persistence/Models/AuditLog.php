@@ -60,4 +60,12 @@ class AuditLog extends Model
     {
         return $this->belongsTo(User::class, 'actor_id');
     }
+
+    /**
+     * @return BelongsTo<Branch>
+     */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 }
