@@ -78,6 +78,20 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
+    # .env.example memakai DB_HOST=db (nama service Docker Compose untuk
+    # dev lokal) — di runner GitHub Actions tidak ada jaringan Compose,
+    # container `postgres` di atas hanya bisa dijangkau lewat localhost.
+    # Variabel job-level ini menimpa .env (vlucas/phpdotenv tidak menimpa
+    # env var yang sudah diset di proses induk — pola yang sama dengan bug
+    # T1.11 di CLAUDE.md), berlaku di seluruh step job ini termasuk
+    # `php artisan migrate` pada step "Setup Laravel".
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: rightclick
+      DB_USERNAME: rightclick
+      DB_PASSWORD: rightclick
+
     services:
       postgres:
         image: postgres:16-alpine
