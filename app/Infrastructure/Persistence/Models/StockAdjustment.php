@@ -32,11 +32,11 @@ class StockAdjustment extends Model
 {
     use Auditable;
     use BelongsToBranch;
-
     use HasDocumentState;
 
     /** @use HasFactory<StockAdjustmentFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
     use TracksUserActions;

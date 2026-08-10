@@ -18,6 +18,7 @@ class Employee extends Model
 
     /** @use HasFactory<EmployeeFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
 

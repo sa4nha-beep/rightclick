@@ -18,6 +18,7 @@ class Partner extends Model
 
     /** @use HasFactory<PartnerFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
 

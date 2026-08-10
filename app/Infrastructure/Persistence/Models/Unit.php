@@ -17,6 +17,7 @@ class Unit extends Model
 
     /** @use HasFactory<UnitFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
 

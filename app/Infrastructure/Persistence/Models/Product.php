@@ -23,6 +23,7 @@ class Product extends Model
 
     /** @use HasFactory<ProductFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
 

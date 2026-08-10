@@ -37,11 +37,11 @@ class StockOpname extends Model
 {
     use Auditable;
     use BelongsToBranch;
-
     use HasDocumentState;
 
     /** @use HasFactory<StockOpnameFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
     use TracksUserActions;

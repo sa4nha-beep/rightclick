@@ -19,6 +19,7 @@ class ProductCategory extends Model
 
     /** @use HasFactory<ProductCategoryFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
 

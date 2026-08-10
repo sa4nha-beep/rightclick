@@ -31,11 +31,11 @@ class StockTransferReceipt extends Model
 {
     use Auditable;
     use BelongsToBranch;
-
     use HasDocumentState;
 
     /** @use HasFactory<StockTransferReceiptFactory> */
     use HasFactory;
+
     use HasUuidV7;
     use SoftDeletes;
     use TracksUserActions;
