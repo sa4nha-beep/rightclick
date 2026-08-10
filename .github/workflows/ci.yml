@@ -97,6 +97,18 @@ jobs:
       DB_DATABASE: rightclick
       DB_USERNAME: rightclick
       DB_PASSWORD: rightclick
+      # .env.example juga memakai REDIS_HOST=redis (Compose service name) +
+      # CACHE_STORE=redis/QUEUE_CONNECTION=redis — job ini tidak punya
+      # service Redis (hanya postgres di atas). phpunit.xml SUDAH menimpa
+      # CACHE_STORE/QUEUE_CONNECTION ke array/sync untuk `php artisan test`,
+      # tapi TIDAK berlaku untuk step "Run migrations" (panggilan artisan
+      # polos, bukan lewat PHPUnit) — migration `create_permission_tables`
+      # (spatie/laravel-permission) menghapus cache permission saat
+      # dijalankan, memicu koneksi Redis nyata yang gagal resolve host
+      # "redis". Ditemukan lewat annotation ::error:: eksplisit, bukan
+      # dugaan — lihat riwayat commit CI sebelumnya.
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
 
     services:
       postgres:
