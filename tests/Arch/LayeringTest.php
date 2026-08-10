@@ -206,3 +206,32 @@ it('setiap entitas Sales & POS Fase 4 memiliki Filament Resource yang menunjuk m
     ['App\Presentation\Filament\Resources\CashierShifts\CashierShiftResource', 'App\Infrastructure\Persistence\Models\CashierShift'],
     ['App\Presentation\Filament\Resources\SaleReturns\SaleReturnResource', 'App\Infrastructure\Persistence\Models\SaleReturn'],
 ]);
+
+/**
+ * T5.10 — sama pola dengan T2.10/T3.8/T4.5, diperluas untuk entitas
+ * Procurement + Kas Fase 5 (PO, penerimaan barang, faktur pembelian, kas).
+ * `PurchaseOrderLine`/`GoodsReceiptLine` SENGAJA TIDAK terdaftar — sama
+ * seperti `StockAdjustmentLine`/`SaleItem`, baris anak dikelola lewat
+ * Repeater `relationship()` pada Resource induknya (T5.6). `PurchasePayment`/
+ * `ReceivablePayment` JUGA TIDAK terdaftar — bukan baris anak dalam
+ * Repeater, tapi ditulis lewat Action kustom ("Catat Pembayaran"/"Catat
+ * Pelunasan") pada `PurchaseInvoiceResource`/`SalesTable` (T5.6), tanpa
+ * Resource independen sendiri (`*Policy` masing-masing menegaskan
+ * create/update/delete lewat gerbang `record_cash_entry`, bukan CRUD
+ * Filament biasa). Entitas LOCAL sinkronisasi (`OutboxEvent`/
+ * `ProcessedEvent`/`SyncState`, T5.7/T5.8) SENGAJA di luar cakupan test
+ * ini — belum ada Filament Resource yang membacanya (murni API/console
+ * command, dicatat di docblok masing-masing Policy).
+ */
+it('setiap entitas Procurement + Kas Fase 5 memiliki Filament Resource yang menunjuk model yang benar', function (string $resourceClass, string $modelClass) {
+    expect(class_exists($resourceClass))->toBeTrue("{$resourceClass} tidak ditemukan.");
+    expect(is_subclass_of($resourceClass, Filament\Resources\Resource::class))->toBeTrue(
+        "{$resourceClass} bukan turunan Filament\\Resources\\Resource.",
+    );
+    expect($resourceClass::getModel())->toBe($modelClass);
+})->with([
+    ['App\Presentation\Filament\Resources\PurchaseOrders\PurchaseOrderResource', 'App\Infrastructure\Persistence\Models\PurchaseOrder'],
+    ['App\Presentation\Filament\Resources\GoodsReceipts\GoodsReceiptResource', 'App\Infrastructure\Persistence\Models\GoodsReceipt'],
+    ['App\Presentation\Filament\Resources\PurchaseInvoices\PurchaseInvoiceResource', 'App\Infrastructure\Persistence\Models\PurchaseInvoice'],
+    ['App\Presentation\Filament\Resources\CashEntries\CashEntryResource', 'App\Infrastructure\Persistence\Models\CashEntry'],
+]);
