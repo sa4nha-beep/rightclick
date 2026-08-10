@@ -153,7 +153,17 @@ jobs:
           echo "::notice::db:show ${STATUS}: ${FLAT}"
 
       - name: Run migrations
-        run: php artisan migrate --force -v
+        run: |
+          set +e
+          OUTPUT=$(php artisan migrate --force -v 2>&1)
+          CODE=$?
+          set -e
+          echo "$OUTPUT"
+          if [ $CODE -ne 0 ]; then
+            FLAT=$(echo "$OUTPUT" | tr '\n' ' ' | cut -c1-900)
+            echo "::error::migrate failed (exit $CODE): ${FLAT}"
+            exit $CODE
+          fi
 
       - name: Create test database
         run: psql -h localhost -U rightclick -d rightclick -c 'CREATE DATABASE rightclick_testing OWNER rightclick;'
