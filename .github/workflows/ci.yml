@@ -83,8 +83,14 @@ jobs:
     # container `postgres` di atas hanya bisa dijangkau lewat localhost.
     # Variabel job-level ini menimpa .env (vlucas/phpdotenv tidak menimpa
     # env var yang sudah diset di proses induk — pola yang sama dengan bug
-    # T1.11 di CLAUDE.md), berlaku di seluruh step job ini termasuk
-    # `php artisan migrate` pada step "Setup Laravel".
+    # T1.11 di CLAUDE.md), berlaku di seluruh step job ini.
+    #
+    # "Setup Laravel" sengaja dipecah jadi step terpisah (Copy .env /
+    # Generate app key / Show resolved DB config / Run migrations) — log
+    # detail step gagal di GitHub Actions memerlukan sign-in untuk publik,
+    # tapi NAMA dan status pass/fail tiap step tetap terlihat tanpa sign-in.
+    # Memecahnya membuat step mana yang gagal terlihat tanpa perlu log
+    # penuh.
     env:
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
@@ -132,11 +138,17 @@ jobs:
         if: steps.composer-cache.outputs.cache-hit != 'true'
         run: composer install --no-progress --prefer-dist
 
-      - name: Setup Laravel
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-          php artisan migrate --force
+      - name: Copy .env
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Show resolved DB config (diagnostic)
+        run: php artisan tinker --execute="echo 'DB_HOST resolved to: ' . config('database.connections.pgsql.host') . PHP_EOL;"
+
+      - name: Run migrations
+        run: php artisan migrate --force -v
 
       - name: Create test database
         run: psql -h localhost -U rightclick -d rightclick -c 'CREATE DATABASE rightclick_testing OWNER rightclick;'
