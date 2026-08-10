@@ -11,13 +11,15 @@ class PermissionSeeder extends Seeder
     /**
      * Seeder phase 2 (T1.5): Five roles and 58 permissions.
      * T3.3 menambah permission ke-59: `view_stock_cost`.
+     * T5.1 menambah permission ke-69: `void_purchase_order`.
      *
      * CLAUDE.md §10 — Otorisasi
      * Role hierarchy: owner > admin > {kasir, gudang} > viewer
      *
-     * Permission domains (59 total setelah T3.3):
+     * Permission domains (69 total setelah T5.1):
      *   Branches (5), Users (7), Partners (6), Products (8),
-     *   Inventory (15), Sales (10), Procurement (6), Financials (6)
+     *   Inventory (15), Sales (10), Procurement (7), Financials (6),
+     *   Platform Settings & Approvals (3), Platform Audit Log (2)
      *
      * `view_stock_cost` (T3.3) — HS-PERM-RIGHTCLICK-v1.2 tidak mendaftar
      * permission ini; ditambahkan karena §2 CLAUDE.md eksplisit menyatakan
@@ -29,6 +31,16 @@ class PermissionSeeder extends Seeder
      * permission ini; Kasir/Gudang tidak — lihat `StockBatchesTable`/
      * `StockMutationsTable` (T3.3) untuk bagaimana ini menyaring kolom
      * `unit_cost` di lapisan query, bukan hanya menyembunyikannya di tabel.
+     *
+     * `void_purchase_order` (T5.1) — sama alasan strukturalnya dengan
+     * `view_stock_cost`: 6 permission Procurement asli (`view_purchase_orders`/
+     * `create_purchase_order`/`edit_purchase_order`/`approve_purchase_order`/
+     * `view_goods_receipt`/`approve_goods_receipt`) tidak punya permission
+     * dedicated untuk membatalkan (void) PO FINAL — `edit_purchase_order`
+     * hanya menggerbang penyuntingan draft (`PurchaseOrderPolicy::update()`).
+     * Sales (`void_sale`) dan Inventory (`void_stock_document`) sudah punya
+     * ini sejak T1.5; Procurement terlewat. Ditambahkan di T5.1, lihat
+     * `PurchaseOrderPolicy::void()`.
      */
     public function run(): void
     {
@@ -96,11 +108,12 @@ class PermissionSeeder extends Seeder
             'manage_sale_discount',
             'void_sale',
 
-            // Procurement (6)
+            // Procurement (7, T5.1 menambah void_purchase_order)
             'view_purchase_orders',
             'create_purchase_order',
             'edit_purchase_order',
             'approve_purchase_order',
+            'void_purchase_order',
             'view_goods_receipt',
             'approve_goods_receipt',
 

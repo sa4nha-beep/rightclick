@@ -12,6 +12,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * @property PartnerType $partner_type
+ */
 class Partner extends Model
 {
     use Auditable;

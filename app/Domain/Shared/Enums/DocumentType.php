@@ -25,7 +25,11 @@ namespace App\Domain\Shared\Enums;
  * eksplisit untuk direkonsiliasi terhadap dokumen asli bila tersedia —
  * BUKAN diam-diam dianggap final. T4.1 menambah `CashierShift` → `SFT`
  * (self-derived, sama alasan). T4.3 menambah `SaleReturn` → `RET`
- * (self-derived). Kode prefix untuk `po`/`gr` (T5.x) masih belum ditetapkan.
+ * (self-derived). T5.1 menambah `PurchaseOrder` → `PO` (self-derived, dua
+ * huruf — beda pola dari yang lain karena "purchase order" secara umum
+ * disingkat begitu, bukan tiga huruf diambil dari nama Indonesia seperti
+ * ADJ/OPN; direkonsiliasi bila `HS-DB-RIGHTCLICK-v1.0` tersedia). Kode
+ * prefix untuk `gr`/faktur (T5.2) masih belum ditetapkan.
  */
 enum DocumentType: string
 {
@@ -36,6 +40,7 @@ enum DocumentType: string
     case TransferReceipt = 'transfer_receipt';
     case CashierShift = 'cashier_shift';
     case SaleReturn = 'sale_return';
+    case PurchaseOrder = 'purchase_order';
 
     /**
      * Kode tiga huruf pada nomor dokumen tercetak.
@@ -50,6 +55,7 @@ enum DocumentType: string
             self::TransferReceipt => 'TRI',
             self::CashierShift => 'SFT',
             self::SaleReturn => 'RET',
+            self::PurchaseOrder => 'PO',
         };
     }
 
@@ -63,6 +69,7 @@ enum DocumentType: string
             self::TransferReceipt => 'Transfer Masuk',
             self::CashierShift => 'Shift Kasir',
             self::SaleReturn => 'Retur Penjualan',
+            self::PurchaseOrder => 'Purchase Order',
         };
     }
 }
