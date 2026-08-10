@@ -182,6 +182,27 @@ jobs:
         env:
           PGPASSWORD: rightclick
 
+      # phpunit.xml memaksa DB_DATABASE=rightclick_testing untuk `php
+      # artisan test` (B3, CLAUDE.md §18) — tapi step di atas hanya
+      # membuat database KOSONG, tidak ada yang pernah memigrasikannya.
+      # Tanpa ini, seluruh test yang menyentuh DB jalan di atas skema
+      # kosong (tabel `migrations` pun tidak ada) — ditemukan lewat
+      # reproduksi lokal yang macet/timeout, bukan pesan error yang jelas.
+      - name: Migrate test database
+        env:
+          DB_DATABASE: rightclick_testing
+        run: |
+          set +e
+          OUTPUT=$(php artisan migrate --force -v 2>&1)
+          CODE=$?
+          set -e
+          echo "$OUTPUT"
+          if [ $CODE -ne 0 ]; then
+            FLAT=$(echo "$OUTPUT" | tr '\n' ' ' | cut -c1-900)
+            echo "::error::migrate (rightclick_testing) failed (exit $CODE): ${FLAT}"
+            exit $CODE
+          fi
+
       - name: Run tests
         run: php artisan test
 
