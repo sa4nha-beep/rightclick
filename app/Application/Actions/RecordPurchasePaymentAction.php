@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Actions;
 
 use App\Application\Services\CashLedgerService;
+use App\Application\Services\OutboxService;
 use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Domain\Sales\Enums\PaymentMethod;
@@ -35,11 +36,20 @@ use Illuminate\Support\Facades\DB;
  * `PurchasePayment` individual — pola sama `FinalizeSaleAction`, entri kas
  * selalu menunjuk dokumen induk). Pembayaran non-tunai TIDAK menyentuh kas
  * fisik, jadi TIDAK menulis `CashEntry` sama sekali.
+ *
+ * `OutboxService` (T5.7 retrofit, simpul kritis): `purchase_payment.recorded`
+ * — BEDA dari event finalize/void lain, aggregate-nya adalah baris
+ * `PurchasePayment` yang BARU dibuat, BUKAN `PurchaseInvoice` induk. Faktur
+ * sudah punya event sendiri (`purchase_invoice.finalized`) diterbitkan di
+ * transaksi TERPISAH saat faktur ITU sendiri difinalisasi — pembayaran ini
+ * terjadi BELAKANGAN, di transaksi lain, jadi butuh event sendiri agar
+ * tidak pernah hilang tanpa jejak ke HQ.
  */
 final class RecordPurchasePaymentAction
 {
     public function __construct(
         private readonly CashLedgerService $cashLedger,
+        private readonly OutboxService $outbox,
     ) {}
 
     /**
@@ -94,6 +104,8 @@ final class RecordPurchasePaymentAction
                     $invoice,
                 );
             }
+
+            $this->outbox->record($invoice->branch, $purchasePayment, 'purchase_payment.recorded');
 
             return $purchasePayment;
         });

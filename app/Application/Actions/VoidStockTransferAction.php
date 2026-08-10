@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Actions;
 
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Exceptions\StockDocumentValidationException;
 use App\Domain\Shared\Enums\DocumentState;
@@ -23,6 +24,7 @@ final class VoidStockTransferAction
     public function __construct(
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(StockTransfer $transfer, string $reason): StockTransfer
@@ -38,6 +40,7 @@ final class VoidStockTransferAction
 
             $this->stockLedger->reverseForReference($transfer, $transfer);
             $this->documentStates->void($transfer, $reason);
+            $this->outbox->record($transfer->branch, $transfer, 'stock_transfer.voided');
 
             return $transfer->fresh();
         });

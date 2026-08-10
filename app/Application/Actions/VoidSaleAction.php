@@ -6,6 +6,7 @@ namespace App\Application\Actions;
 
 use App\Application\Services\CashLedgerService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Sales\Exceptions\SaleValidationException;
 use App\Infrastructure\Persistence\Models\Sale;
@@ -29,6 +30,8 @@ use Illuminate\Support\Facades\DB;
  * penjualan yang sudah menerima cicilan pelunasan akan meninggalkan
  * pembayaran yang tidak jelas dasarnya.
  *
+ * `OutboxService` (T5.7 retrofit, simpul kritis): `sale.voided`.
+ *
  * TIDAK menyesuaikan ulang `cashier_shifts.closing_cash_expected`/
  * `variance` bila shift terkait sudah ditutup sebelum void ini terjadi —
  * keterbatasan yang didokumentasikan, bukan kelalaian: rekonsiliasi shift
@@ -41,6 +44,7 @@ final class VoidSaleAction
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
         private readonly CashLedgerService $cashLedger,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(Sale $sale, string $reason): Sale
@@ -55,6 +59,7 @@ final class VoidSaleAction
             $this->stockLedger->reverseForReference($sale, $sale);
             $this->cashLedger->reverseForReference($sale, $sale);
             $this->documentStates->void($sale, $reason);
+            $this->outbox->record($sale->branch, $sale, 'sale.voided');
 
             return $sale->fresh();
         });

@@ -6,6 +6,7 @@ namespace App\Application\Actions;
 
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockMutationType;
 use App\Domain\Inventory\Exceptions\StockDocumentValidationException;
@@ -32,6 +33,7 @@ final class ReceiveStockTransferAction
         private readonly DocumentNumberService $documentNumbers,
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(StockTransfer $transfer): StockTransferReceipt
@@ -75,6 +77,8 @@ final class ReceiveStockTransferAction
             }
 
             $this->documentStates->finalize($receipt);
+
+            $this->outbox->record($transfer->destBranch, $receipt, 'stock_transfer_receipt.finalized');
 
             return $receipt->fresh();
         });

@@ -6,6 +6,7 @@ namespace App\Application\Actions;
 
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\SerialNumberValidationService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockMutationType;
@@ -42,6 +43,7 @@ final class FinalizeSaleReturnAction
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
         private readonly SerialNumberValidationService $serialNumbers,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(SaleReturn $saleReturn): SaleReturn
@@ -84,6 +86,8 @@ final class FinalizeSaleReturnAction
             $saleReturn->save();
 
             $this->documentStates->finalize($saleReturn);
+
+            $this->outbox->record($saleReturn->branch, $saleReturn, 'sale_return.finalized');
 
             return $saleReturn->fresh(['lines']);
         });

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Actions;
 
 use App\Application\Services\CashLedgerService;
+use App\Application\Services\OutboxService;
 use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Sales\Enums\PaymentMethod;
 use App\Domain\Sales\Exceptions\SaleValidationException;
@@ -30,11 +31,18 @@ use Illuminate\Support\Facades\DB;
  * peristiwa kas berbeda meski sama-sama dari penjualan, lihat docblock
  * enum) yang merujuk `Sale` ini. Pembayaran non-tunai TIDAK menyentuh kas
  * fisik.
+ *
+ * `OutboxService` (T5.7 retrofit, simpul kritis): `receivable_payment.recorded`
+ * — aggregate-nya baris `ReceivablePayment` yang BARU dibuat, BUKAN `Sale`
+ * induk (sudah punya event sendiri, `sale.finalized`, di transaksi
+ * TERPISAH saat sale itu sendiri difinalisasi) — sama alasan
+ * `RecordPurchasePaymentAction`.
  */
 final class RecordReceivablePaymentAction
 {
     public function __construct(
         private readonly CashLedgerService $cashLedger,
+        private readonly OutboxService $outbox,
     ) {}
 
     /**
@@ -87,6 +95,8 @@ final class RecordReceivablePaymentAction
                     $locked,
                 );
             }
+
+            $this->outbox->record($locked->branch, $receivablePayment, 'receivable_payment.recorded');
 
             return $receivablePayment;
         });

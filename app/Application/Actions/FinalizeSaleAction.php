@@ -8,6 +8,7 @@ use App\Application\Services\ApprovalService;
 use App\Application\Services\CashLedgerService;
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Inventory\Enums\StockMutationType;
@@ -57,6 +58,10 @@ use Illuminate\Support\Facades\DB;
  * baris `SalePayment` individual — pola sama `stock_mutations` yang selalu
  * menunjuk dokumen induk). Pembayaran non-tunai (kartu/transfer/QRIS) TIDAK
  * menyentuh kas fisik, jadi TIDAK menulis `CashEntry` sama sekali.
+ *
+ * `OutboxService` (T5.7 retrofit, simpul kritis): `sale.finalized` dicatat
+ * di `applyAndFinalize()` — mencakup baik `execute()` langsung maupun
+ * jalur `ApproveSaleDiscountAction`, satu titik untuk kedua alur.
  */
 final class FinalizeSaleAction
 {
@@ -66,6 +71,7 @@ final class FinalizeSaleAction
         private readonly StockLedgerService $stockLedger,
         private readonly ApprovalService $approvals,
         private readonly CashLedgerService $cashLedger,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(Sale $sale): Sale
@@ -166,6 +172,8 @@ final class FinalizeSaleAction
         }
 
         $this->documentStates->finalize($sale);
+
+        $this->outbox->record($sale->branch, $sale, 'sale.finalized');
 
         return $sale->fresh(['items', 'payments']);
     }

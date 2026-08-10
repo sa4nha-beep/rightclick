@@ -6,6 +6,7 @@ namespace App\Application\Actions;
 
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Domain\Sales\Enums\PaymentMethod;
 use App\Domain\Sales\Exceptions\CashierShiftException;
 use App\Domain\Shared\Enums\DocumentState;
@@ -32,6 +33,7 @@ final class CloseCashierShiftAction
     public function __construct(
         private readonly DocumentNumberService $documentNumbers,
         private readonly DocumentStateService $documentStates,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(CashierShift $shift, string $closingCashCounted): CashierShift
@@ -54,6 +56,8 @@ final class CloseCashierShiftAction
             $shift->save();
 
             $this->documentStates->finalize($shift);
+
+            $this->outbox->record($shift->branch, $shift, 'cashier_shift.finalized');
 
             return $shift->fresh();
         });

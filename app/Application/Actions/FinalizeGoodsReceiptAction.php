@@ -6,6 +6,7 @@ namespace App\Application\Actions;
 
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\SerialNumberValidationService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockMutationType;
@@ -37,6 +38,7 @@ final class FinalizeGoodsReceiptAction
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
         private readonly SerialNumberValidationService $serialNumbers,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(GoodsReceipt $goodsReceipt): GoodsReceipt
@@ -67,6 +69,8 @@ final class FinalizeGoodsReceiptAction
             $goodsReceipt->save();
 
             $this->documentStates->finalize($goodsReceipt);
+
+            $this->outbox->record($goodsReceipt->branch, $goodsReceipt, 'goods_receipt.finalized');
 
             return $goodsReceipt->fresh(['lines']);
         });

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Actions;
 
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Exceptions\StockDocumentValidationException;
 use App\Domain\Shared\Enums\DocumentState;
@@ -17,12 +18,15 @@ use Illuminate\Support\Facades\DB;
  * batalkan faktur lebih dulu, baru penerimaannya. Tanpa urutan ini, faktur
  * bisa tetap mengklaim hutang atas stok yang sudah dibalik dari ledger —
  * pola sama `VoidStockTransferAction` (dispatch vs receipt).
+ *
+ * `OutboxService` (T5.7 retrofit, simpul kritis): `goods_receipt.voided`.
  */
 final class VoidGoodsReceiptAction
 {
     public function __construct(
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(GoodsReceipt $goodsReceipt, string $reason): GoodsReceipt
@@ -38,6 +42,7 @@ final class VoidGoodsReceiptAction
 
             $this->stockLedger->reverseForReference($goodsReceipt, $goodsReceipt);
             $this->documentStates->void($goodsReceipt, $reason);
+            $this->outbox->record($goodsReceipt->branch, $goodsReceipt, 'goods_receipt.voided');
 
             return $goodsReceipt->fresh();
         });

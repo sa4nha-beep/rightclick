@@ -6,6 +6,7 @@ namespace App\Application\Actions;
 
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Domain\Shared\Enums\DocumentType;
@@ -29,6 +30,7 @@ final class FinalizePurchaseInvoiceAction
     public function __construct(
         private readonly DocumentNumberService $documentNumbers,
         private readonly DocumentStateService $documentStates,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(PurchaseInvoice $purchaseInvoice): PurchaseInvoice
@@ -43,6 +45,8 @@ final class FinalizePurchaseInvoiceAction
             $purchaseInvoice->save();
 
             $this->documentStates->finalize($purchaseInvoice);
+
+            $this->outbox->record($purchaseInvoice->branch, $purchaseInvoice, 'purchase_invoice.finalized');
 
             return $purchaseInvoice->fresh();
         });

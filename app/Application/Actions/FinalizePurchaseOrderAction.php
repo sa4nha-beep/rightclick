@@ -7,6 +7,7 @@ namespace App\Application\Actions;
 use App\Application\Services\ApprovalService;
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Domain\Procurement\Exceptions\PurchaseOrderValidationException;
 use App\Domain\Shared\Enums\DocumentType;
 use App\Domain\Shared\Enums\PartnerType;
@@ -39,6 +40,7 @@ final class FinalizePurchaseOrderAction
         private readonly DocumentNumberService $documentNumbers,
         private readonly DocumentStateService $documentStates,
         private readonly ApprovalService $approvals,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(PurchaseOrder $purchaseOrder): PurchaseOrder
@@ -82,6 +84,8 @@ final class FinalizePurchaseOrderAction
         $purchaseOrder->save();
 
         $this->documentStates->finalize($purchaseOrder);
+
+        $this->outbox->record($purchaseOrder->branch, $purchaseOrder, 'purchase_order.finalized');
 
         return $purchaseOrder->fresh(['lines']);
     }

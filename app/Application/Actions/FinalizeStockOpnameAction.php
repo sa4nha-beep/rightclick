@@ -6,6 +6,7 @@ namespace App\Application\Actions;
 
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\SerialNumberValidationService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockMutationType;
@@ -44,6 +45,7 @@ final class FinalizeStockOpnameAction
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
         private readonly SerialNumberValidationService $serialNumbers,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(StockOpname $opname): StockOpname
@@ -117,6 +119,8 @@ final class FinalizeStockOpnameAction
             }
 
             $this->documentStates->finalize($opname);
+
+            $this->outbox->record($opname->branch, $opname, 'stock_opname.finalized');
 
             return $opname->fresh(['lines']);
         });

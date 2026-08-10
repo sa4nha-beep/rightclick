@@ -7,6 +7,7 @@ namespace App\Application\Actions;
 use App\Application\Services\ApprovalService;
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Application\Services\SerialNumberValidationService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockAdjustmentDirection;
@@ -47,6 +48,7 @@ final class FinalizeStockAdjustmentAction
         private readonly StockLedgerService $stockLedger,
         private readonly ApprovalService $approvals,
         private readonly SerialNumberValidationService $serialNumbers,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(StockAdjustment $adjustment): StockAdjustment
@@ -114,6 +116,8 @@ final class FinalizeStockAdjustmentAction
         }
 
         $this->documentStates->finalize($adjustment);
+
+        $this->outbox->record($adjustment->branch, $adjustment, 'stock_adjustment.finalized');
 
         return $adjustment->fresh(['lines']);
     }

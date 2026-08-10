@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Actions;
 
 use App\Application\Services\DocumentStateService;
+use App\Application\Services\OutboxService;
 use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Infrastructure\Persistence\Models\PurchaseInvoice;
 use Illuminate\Support\Facades\DB;
@@ -22,11 +23,14 @@ use Illuminate\Support\Facades\DB;
  * menerima cicilan akan meninggalkan pembayaran yang tidak jelas
  * dasarnya. Pola sama `VoidGoodsReceiptAction` (ditolak selama ada faktur
  * aktif) diterapkan satu langkah lebih jauh ke rantai dokumen.
+ *
+ * `OutboxService` (T5.7 retrofit, simpul kritis): `purchase_invoice.voided`.
  */
 final class VoidPurchaseInvoiceAction
 {
     public function __construct(
         private readonly DocumentStateService $documentStates,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function execute(PurchaseInvoice $purchaseInvoice, string $reason): PurchaseInvoice
@@ -39,6 +43,7 @@ final class VoidPurchaseInvoiceAction
             }
 
             $this->documentStates->void($purchaseInvoice, $reason);
+            $this->outbox->record($purchaseInvoice->branch, $purchaseInvoice, 'purchase_invoice.voided');
 
             return $purchaseInvoice->fresh();
         });
