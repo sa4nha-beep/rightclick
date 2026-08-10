@@ -2,20 +2,17 @@
 
 declare(strict_types=1);
 
-namespace App\Presentation\Filament\Resources\Sales\Tables;
+namespace App\Presentation\Filament\Resources\PurchaseInvoices\Tables;
 
-use App\Application\Actions\ApproveSaleDiscountAction;
-use App\Application\Actions\FinalizeSaleAction;
-use App\Application\Actions\RecordReceivablePaymentAction;
-use App\Application\Actions\VoidSaleAction;
+use App\Application\Actions\FinalizePurchaseInvoiceAction;
+use App\Application\Actions\RecordPurchasePaymentAction;
+use App\Application\Actions\VoidPurchaseInvoiceAction;
+use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Domain\Sales\Enums\PaymentMethod;
 use App\Domain\Sales\Enums\PaymentStatus;
-use App\Domain\Sales\Exceptions\SaleValidationException;
-use App\Domain\Shared\Enums\ApprovalStatus;
 use App\Domain\Shared\Enums\DocumentState;
-use App\Infrastructure\Persistence\Models\Approval;
-use App\Infrastructure\Persistence\Models\ReceivablePayment;
-use App\Infrastructure\Persistence\Models\Sale;
+use App\Infrastructure\Persistence\Models\PurchaseInvoice;
+use App\Infrastructure\Persistence\Models\PurchasePayment;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -27,17 +24,16 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
-class SalesTable
+/**
+ * TANPA `hasPendingApproval()`/action `approve` — sama alasan
+ * `GoodsReceiptsTable`, tidak ada alur ambang untuk faktur pembelian.
+ *
+ * Action `pay` (T5.3, "Catat Pembayaran") — BEDA dari `finalize`/`void`:
+ * tetap tersedia berkali-kali selama dokumen `final` dan sisa hutang > 0
+ * (cicilan/parsial), bukan transisi status sekali jalan.
+ */
+class PurchaseInvoicesTable
 {
-    private static function hasPendingApproval(Sale $record): bool
-    {
-        return Approval::query()
-            ->where('approvable_type', $record->getMorphClass())
-            ->where('approvable_id', $record->getKey())
-            ->where('status', ApprovalStatus::Pending)
-            ->exists();
-    }
-
     public static function configure(Table $table): Table
     {
         return $table
@@ -46,11 +42,13 @@ class SalesTable
                     ->label('No. Dokumen')
                     ->placeholder('— (draft)')
                     ->searchable(),
-                TextColumn::make('branch.name')
-                    ->label('Cabang'),
+                TextColumn::make('invoice_number')
+                    ->label('No. Faktur Pemasok')
+                    ->searchable(),
                 TextColumn::make('partner.name')
-                    ->label('Pelanggan')
-                    ->placeholder('Walk-in'),
+                    ->label('Pemasok'),
+                TextColumn::make('goodsReceipt.document_number')
+                    ->label('Penerimaan'),
                 TextColumn::make('state')
                     ->label('Status')
                     ->badge()
@@ -60,15 +58,13 @@ class SalesTable
                         DocumentState::Final => 'success',
                         DocumentState::Void => 'danger',
                     }),
-                TextColumn::make('items_count')
-                    ->label('Baris')
-                    ->counts('items'),
                 TextColumn::make('total_amount')
                     ->label('Total')
                     ->money('IDR'),
                 TextColumn::make('payment_status')
                     ->label('Pelunasan')
                     ->badge()
+                    ->getStateUsing(fn (PurchaseInvoice $record): ?PaymentStatus => $record->state === DocumentState::Final ? $record->paymentStatus() : null)
                     ->formatStateUsing(fn (?PaymentStatus $state): string => $state?->label() ?? '—')
                     ->color(fn (?PaymentStatus $state): string => match ($state) {
                         PaymentStatus::Paid => 'success',
@@ -76,9 +72,10 @@ class SalesTable
                         default => 'gray',
                     }),
                 TextColumn::make('balance_due')
-                    ->label('Sisa Tagihan')
+                    ->label('Sisa Hutang')
                     ->money('IDR')
                     ->placeholder('—')
+                    ->getStateUsing(fn (PurchaseInvoice $record): ?string => $record->state === DocumentState::Final ? $record->balanceDue() : null)
                     ->color(fn (?string $state): ?string => $state !== null && (float) $state > 0 ? 'danger' : null),
                 TextColumn::make('created_at')
                     ->label('Dibuat')
@@ -97,63 +94,34 @@ class SalesTable
             ])
             ->recordActions([
                 EditAction::make()
-                    ->visible(fn (Sale $record): bool => $record->state === DocumentState::Draft && ! self::hasPendingApproval($record)),
+                    ->visible(fn (PurchaseInvoice $record): bool => $record->state === DocumentState::Draft),
                 DeleteAction::make()
-                    ->visible(fn (Sale $record): bool => $record->state === DocumentState::Draft && ! self::hasPendingApproval($record)),
+                    ->visible(fn (PurchaseInvoice $record): bool => $record->state === DocumentState::Draft),
                 Action::make('finalize')
                     ->label('Finalisasi')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn (Sale $record): bool => ! self::hasPendingApproval($record)
-                        && (auth()->user()?->can('finalize', $record) ?? false))
-                    ->action(function (Sale $record) {
+                    ->visible(fn (PurchaseInvoice $record): bool => auth()->user()?->can('finalize', $record) ?? false)
+                    ->action(function (PurchaseInvoice $record) {
                         try {
-                            $result = app(FinalizeSaleAction::class)->execute($record);
-                        } catch (SaleValidationException $e) {
+                            app(FinalizePurchaseInvoiceAction::class)->execute($record);
+                        } catch (PurchaseInvoiceValidationException $e) {
                             Notification::make()->title('Tidak dapat difinalisasi')->body($e->getMessage())->danger()->send();
 
                             return;
                         }
 
-                        if ($result->state === DocumentState::Draft) {
-                            Notification::make()
-                                ->title('Menunggu approval')
-                                ->body('Diskon melebihi ambang — menunggu keputusan Admin/Owner (TH1/TH2).')
-                                ->warning()
-                                ->send();
-
-                            return;
-                        }
-
-                        Notification::make()->title('Penjualan difinalisasi.')->success()->send();
+                        Notification::make()->title('Faktur pembelian difinalisasi.')->success()->send();
                     }),
-                Action::make('approve')
-                    ->label('Setujui Diskon')
-                    ->icon('heroicon-o-hand-thumb-up')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->visible(fn (Sale $record): bool => self::hasPendingApproval($record)
-                        && (auth()->user()?->can('approve', $record) ?? false))
-                    ->action(function (Sale $record) {
-                        try {
-                            app(ApproveSaleDiscountAction::class)->execute($record);
-                        } catch (SaleValidationException $e) {
-                            Notification::make()->title('Tidak dapat difinalisasi')->body($e->getMessage())->danger()->send();
-
-                            return;
-                        }
-
-                        Notification::make()->title('Diskon disetujui, penjualan difinalisasi.')->success()->send();
-                    }),
-                Action::make('collectReceivable')
-                    ->label('Catat Pelunasan')
+                Action::make('pay')
+                    ->label('Catat Pembayaran')
                     ->icon('heroicon-o-banknotes')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn (Sale $record): bool => $record->state === DocumentState::Final
-                        && bccomp($record->remainingReceivable(), '0', 2) > 0
-                        && (auth()->user()?->can('create', ReceivablePayment::class) ?? false))
+                    ->visible(fn (PurchaseInvoice $record): bool => $record->state === DocumentState::Final
+                        && bccomp($record->balanceDue(), '0', 2) > 0
+                        && (auth()->user()?->can('create', PurchasePayment::class) ?? false))
                     ->schema([
                         Select::make('method')
                             ->label('Metode')
@@ -169,31 +137,38 @@ class SalesTable
                             ->label('No. Referensi')
                             ->maxLength(100),
                     ])
-                    ->action(function (Sale $record, array $data) {
+                    ->action(function (PurchaseInvoice $record, array $data) {
                         try {
-                            app(RecordReceivablePaymentAction::class)->execute($record, $data);
-                        } catch (SaleValidationException $e) {
-                            Notification::make()->title('Pelunasan ditolak')->body($e->getMessage())->danger()->send();
+                            app(RecordPurchasePaymentAction::class)->execute($record, $data);
+                        } catch (PurchaseInvoiceValidationException $e) {
+                            Notification::make()->title('Pembayaran ditolak')->body($e->getMessage())->danger()->send();
 
                             return;
                         }
 
-                        Notification::make()->title('Pelunasan piutang tercatat.')->success()->send();
+                        Notification::make()->title('Pembayaran tercatat.')->success()->send();
                     }),
                 Action::make('void')
                     ->label('Batalkan')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn (Sale $record): bool => auth()->user()?->can('void', $record) ?? false)
+                    ->visible(fn (PurchaseInvoice $record): bool => auth()->user()?->can('void', $record) ?? false)
                     ->schema([
                         Textarea::make('reason')
                             ->label('Alasan Pembatalan')
                             ->required(),
                     ])
-                    ->action(function (Sale $record, array $data) {
-                        app(VoidSaleAction::class)->execute($record, $data['reason']);
-                        Notification::make()->title('Penjualan dibatalkan.')->success()->send();
+                    ->action(function (PurchaseInvoice $record, array $data) {
+                        try {
+                            app(VoidPurchaseInvoiceAction::class)->execute($record, $data['reason']);
+                        } catch (PurchaseInvoiceValidationException $e) {
+                            Notification::make()->title('Tidak dapat dibatalkan')->body($e->getMessage())->danger()->send();
+
+                            return;
+                        }
+
+                        Notification::make()->title('Faktur pembelian dibatalkan.')->success()->send();
                     }),
             ]);
     }
