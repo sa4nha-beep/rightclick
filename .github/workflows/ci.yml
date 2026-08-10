@@ -145,7 +145,8 @@ jobs:
         run: php artisan key:generate
 
       - name: Show resolved DB config (diagnostic)
-        run: php artisan tinker --execute="echo 'DB_HOST resolved to: ' . config('database.connections.pgsql.host') . PHP_EOL;"
+        run: |
+          php artisan tinker --execute="echo 'DB_HOST resolved to ' . config('database.connections.pgsql.host') . PHP_EOL;"
 
       - name: Run migrations
         run: php artisan migrate --force -v
