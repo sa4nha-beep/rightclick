@@ -3,13 +3,16 @@
 declare(strict_types=1);
 
 use App\Application\Actions\FinalizeSaleAction;
+use App\Application\Actions\RecordReceivablePaymentAction;
 use App\Application\Actions\VoidSaleAction;
 use App\Application\Services\CashLedgerService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockMutationType;
+use App\Domain\Sales\Exceptions\SaleValidationException;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Infrastructure\Persistence\Models\Branch;
 use App\Infrastructure\Persistence\Models\CashierShift;
+use App\Infrastructure\Persistence\Models\Partner;
 use App\Infrastructure\Persistence\Models\Product;
 use App\Infrastructure\Persistence\Models\Sale;
 use Illuminate\Support\Facades\DB;
@@ -68,4 +71,22 @@ it('T5.4 — void membalik CashEntry kas masuk (pembayaran tunai)', function () 
     $this->voidAction->execute($finalized, 'Salah input kasir');
 
     expect($cashLedger->balance($this->branch))->toEqual('0.00');
+});
+
+it('T5.5 — menolak void bila penjualan sudah menerima pelunasan piutang', function () {
+    DB::transaction(fn () => $this->ledger->receive(
+        $this->branch, $this->product, '10.0000', '5000.00', now(), Branch::factory()->create(), StockMutationType::Receipt,
+    ));
+
+    $partner = Partner::factory()->create();
+    $sale = Sale::factory()->create(['branch_id' => $this->branch->id, 'cashier_shift_id' => $this->shift->id, 'partner_id' => $partner->id]);
+    $sale->items()->create(['product_id' => $this->product->id, 'quantity' => '4.0000', 'unit_price' => '9000.00']);
+    $sale->payments()->create(['method' => 'cash', 'amount' => '20000.00']);
+
+    $finalized = $this->finalizeAction->execute($sale);
+
+    app(RecordReceivablePaymentAction::class)->execute($finalized, ['method' => 'cash', 'amount' => '5000.00']);
+
+    expect(fn () => $this->voidAction->execute($finalized->fresh(), 'Coba batalkan'))
+        ->toThrow(SaleValidationException::class);
 });

@@ -27,6 +27,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * finalisasi — lihat catatan migration `add_payment_tracking_to_sales_table`
  * untuk alasan tidak ada tabel `receivables` terpisah di sini (Fase 5).
  *
+ * `balance_due` (T4.2) adalah piutang AWAL saat sale ini difinalisasi —
+ * TIDAK PERNAH diperbarui lagi (R4). Pelunasan BELAKANGAN dicatat di
+ * `receivable_payments` (T5.5, pola persis `PurchasePayment`/T5.3); sisa
+ * piutang KINI dihitung, bukan disimpan — lihat `amountCollected()`/
+ * `remainingReceivable()`/`receivableStatus()`.
+ *
  * @property string $branch_id
  * @property string $cashier_shift_id
  * @property string|null $partner_id
@@ -127,5 +133,79 @@ class Sale extends Model
     public function returns(): HasMany
     {
         return $this->hasMany(SaleReturn::class);
+    }
+
+    /**
+     * @return HasMany<ReceivablePayment, $this>
+     */
+    public function receivablePayments(): HasMany
+    {
+        return $this->hasMany(ReceivablePayment::class);
+    }
+
+    /**
+     * Total piutang yang sudah dikumpulkan SETELAH finalisasi — SUM
+     * `receivable_payments.amount`, bukan kolom tersimpan (lihat docblock
+     * kelas).
+     */
+    public function amountCollected(): string
+    {
+        return (string) $this->receivablePayments()->sum('amount');
+    }
+
+    /**
+     * Sisa piutang KINI — `balance_due` (piutang awal, dikunci saat
+     * finalisasi) dikurangi `amountCollected()`.
+     */
+    public function remainingReceivable(): string
+    {
+        return bcsub((string) $this->balance_due, $this->amountCollected(), 2);
+    }
+
+    /**
+     * Status piutang KINI — BEDA dari `payment_status` tersimpan (T4.2,
+     * status DP pada saat finalisasi, historis dan tidak pernah berubah).
+     * Method ini menghitung ulang dari `remainingReceivable()`.
+     */
+    public function receivableStatus(): PaymentStatus
+    {
+        if (bccomp((string) $this->balance_due, '0', 2) <= 0) {
+            return PaymentStatus::Paid;
+        }
+
+        $collected = $this->amountCollected();
+
+        if (bccomp($collected, '0', 2) <= 0) {
+            return PaymentStatus::Unpaid;
+        }
+
+        if (bccomp($collected, (string) $this->balance_due, 2) >= 0) {
+            return PaymentStatus::Paid;
+        }
+
+        return PaymentStatus::Partial;
+    }
+
+    /**
+     * Saldo piutang total dari satu pelanggan di satu cabang — SUM
+     * `remainingReceivable()` atas seluruh penjualan FINAL (non-void) milik
+     * pelanggan tersebut. Dasar "saldo piutang per partner" (T5.5), pola
+     * persis `PurchaseInvoice::outstandingBalanceForPartner()` (T5.3).
+     */
+    public static function outstandingReceivableForPartner(string $branchId, string $partnerId): string
+    {
+        $sales = self::query()
+            ->where('branch_id', $branchId)
+            ->where('partner_id', $partnerId)
+            ->where('state', DocumentState::Final)
+            ->get();
+
+        $total = '0';
+
+        foreach ($sales as $sale) {
+            $total = bcadd($total, $sale->remainingReceivable(), 2);
+        }
+
+        return $total;
     }
 }

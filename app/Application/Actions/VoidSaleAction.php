@@ -7,6 +7,7 @@ namespace App\Application\Actions;
 use App\Application\Services\CashLedgerService;
 use App\Application\Services\DocumentStateService;
 use App\Application\Services\StockLedgerService;
+use App\Domain\Sales\Exceptions\SaleValidationException;
 use App\Infrastructure\Persistence\Models\Sale;
 use Illuminate\Support\Facades\DB;
 
@@ -21,6 +22,12 @@ use Illuminate\Support\Facades\DB;
  * menerbitkan entri kas KELUAR berlawanan yang merujuk balik ke `$sale`
  * ini — tanpa ini, kas yang sudah dibalikkan lewat void tetap tercatat
  * sebagai masuk selamanya di ledger kas.
+ *
+ * Ditolak bila sudah ada `receivable_payments` tercatat (T5.5) — pola
+ * sama `VoidPurchaseInvoiceAction` (T5.3): pelunasan piutang bersifat
+ * immutable tanpa mekanisme koreksi individual, jadi membatalkan
+ * penjualan yang sudah menerima cicilan pelunasan akan meninggalkan
+ * pembayaran yang tidak jelas dasarnya.
  *
  * TIDAK menyesuaikan ulang `cashier_shifts.closing_cash_expected`/
  * `variance` bila shift terkait sudah ditutup sebelum void ini terjadi —
@@ -39,6 +46,12 @@ final class VoidSaleAction
     public function execute(Sale $sale, string $reason): Sale
     {
         return DB::transaction(function () use ($sale, $reason) {
+            if ($sale->receivablePayments()->exists()) {
+                throw new SaleValidationException(
+                    'Penjualan ini sudah menerima pelunasan piutang — tidak dapat dibatalkan selama ada cicilan tercatat.',
+                );
+            }
+
             $this->stockLedger->reverseForReference($sale, $sale);
             $this->cashLedger->reverseForReference($sale, $sale);
             $this->documentStates->void($sale, $reason);
