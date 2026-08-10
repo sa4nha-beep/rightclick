@@ -2,21 +2,31 @@
 
 declare(strict_types=1);
 
+use App\Application\Actions\FinalizeSaleAction;
 use App\Domain\Shared\Enums\ApprovalStatus;
 use App\Domain\Shared\Enums\AuditAction;
+use App\Domain\Shared\Enums\DocumentState;
 use App\Domain\Shared\Enums\NodeRole;
 use App\Infrastructure\Persistence\Models\Approval;
 use App\Infrastructure\Persistence\Models\AuditLog;
 use App\Infrastructure\Persistence\Models\Branch;
+use App\Infrastructure\Persistence\Models\CashierShift;
+use App\Infrastructure\Persistence\Models\Product;
+use App\Infrastructure\Persistence\Models\Sale;
+use App\Infrastructure\Persistence\Models\Service;
 use App\Infrastructure\Persistence\Models\Setting;
 use App\Infrastructure\Persistence\Models\User;
 use App\Infrastructure\Persistence\Policies\ApprovalPolicy;
 use App\Infrastructure\Persistence\Policies\AuditLogPolicy;
 use App\Infrastructure\Persistence\Policies\BranchPolicy;
+use App\Infrastructure\Persistence\Policies\SalePolicy;
 use App\Infrastructure\Persistence\Policies\SettingPolicy;
 use App\Infrastructure\Persistence\Support\BranchContext;
+use App\Presentation\Pos\Livewire\PosTerminal;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
+use Livewire\Livewire;
 
 /**
  * T1.13 — Pengujian otorisasi negatif PT1–PT16 (HS-PERM-RIGHTCLICK-v1.2 §7).
@@ -29,17 +39,23 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  * bukan mereproduksi skenario bisnis literalnya kata demi kata:
  *   PT3, PT4, PT6, PT8, PT9, PT10, PT11
  *
- * DITUNDA ke fase modul terkait — skenario menyebut Sale/PurchaseOrder/
- * Product/StockAdjustment/Employee yang belum ada modelnya sama sekali:
- *   PT1  (Kasir → laporan HPP)            → Fase 4 (Sales/POS)
- *   PT2  (endpoint cogs_amount)           → Fase 4 (Sales/POS)
- *   PT5  (void penjualan final)           → Fase 4 (Sales/POS)
- *   PT7  (diskon POS → approval, AP-01)   → Fase 4 (Sales/POS)
- *   PT12 (Gudang buka PO tanpa harga)     → Fase 5 (Procurement)
- *   PT13 (diskon Rp150rb → approval TH1)  → Fase 4 (Sales/POS)
- *   PT14 (diskon 2 baris total TA2)       → Fase 4 (Sales/POS)
- *   PT15 (penyesuaian stok TH3b)          → Fase 3 (Inventory)
- *   PT16 (harga di bawah HPP TH5c)        → Fase 2 (Master Data)
+ * DITUTUP di sini (T5.9) — Sale/CashierShift sudah ada sejak Fase 4,
+ * ditegakkan dengan PERAN NYATA (`assignRole('kasir')` via PermissionSeeder,
+ * bukan permission ad-hoc `makeTestUser()`), menutup kesenjangan antara
+ * "mekanisme Policy-nya benar" (sudah teruji sejak T4.1/T4.2) dan "peran
+ * Kasir yang SUNGGUHAN memang tidak diberi permission itu":
+ *   PT1  (Kasir → laporan HPP)            → lihat "PT1" di bawah
+ *   PT2  (endpoint cogs_amount)           → lihat "PT2" di bawah
+ *   PT5  (void penjualan final)           → lihat "PT5" di bawah
+ *   PT7  (diskon POS → approval, AP-01)   → lihat "PT7/PT13" di bawah
+ *   PT13 (diskon Rp150rb → approval TH1)  → lihat "PT7/PT13" di bawah
+ *   PT14 (diskon 2 baris total TA2)       → lihat "PT14" di bawah
+ *
+ * MASIH DITUNDA — model/modul terkait belum menjadi fokus fase manapun
+ * yang sudah menutupnya secara eksplisit:
+ *   PT12 (Gudang buka PO tanpa harga)     → Procurement (T5.1 ada, PT12 belum ditulis)
+ *   PT15 (penyesuaian stok TH3b)          → ✅ sudah ditutup T3.5
+ *   PT16 (harga di bawah HPP TH5c)        → Master Data (T2.5 ada, TH5c belum ditegakkan sama sekali)
  *
  * Modul-modul di atas WAJIB menambahkan test PT-nya sendiri saat dibangun
  * — dicatat di CLAUDE.md §11/§13, bukan celah tersembunyi. Mekanisme yang
@@ -228,3 +244,171 @@ it('PT10 — locally_disabled_at (darurat offline) juga mengakhiri sesi', functi
 it('PT11 — referensi: architecture test Policy-per-model ada di tests/Arch/LayeringTest.php', function () {
     expect(file_exists(base_path('tests/Arch/LayeringTest.php')))->toBeTrue();
 })->skip('Dokumentasi referensi silang — pengujian sungguhan berjalan di suite Arch, bukan Feature.');
+
+/**
+ * PT1 — Kasir tidak pernah menerima data HPP/margin lewat katalog POS
+ * (POS-06/P6). `PosTerminal::products()`/`services()` (T4.4) HANYA
+ * men-select kolom aman secara eksplisit — dibuktikan di sini dengan peran
+ * `kasir` SUNGGUHAN (bukan permission ad-hoc) memanggil method itu lewat
+ * komponen Livewire yang benar-benar di-mount, lalu memeriksa TIDAK ADA
+ * satu pun kunci atribut ber-bau biaya/margin yang lolos ke koleksi hasil.
+ */
+it('PT1 — Kasir tidak pernah menerima data HPP/margin dari katalog POS', function () {
+    $branch = Branch::factory()->create();
+    $kasir = User::factory()->for($branch, 'defaultBranch')->create();
+    $kasir->assignRole('kasir');
+    $this->actingAs($kasir);
+    app(BranchContext::class)->set($branch->id);
+
+    Product::factory()->create(['selling_price' => '20000.00']);
+    Service::factory()->create(['price' => '50000.00']);
+
+    $component = Livewire::test(PosTerminal::class);
+    $products = $component->instance()->products();
+    $services = $component->instance()->services();
+
+    expect($products)->not->toBeEmpty()
+        ->and($services)->not->toBeEmpty();
+
+    $costLikeKeys = ['unit_cost', 'unit_cost_snapshot', 'cost_amount', 'margin', 'purchase_price'];
+
+    foreach ($products as $product) {
+        expect(array_intersect($costLikeKeys, array_keys($product->getAttributes())))->toBeEmpty();
+    }
+    foreach ($services as $service) {
+        expect(array_intersect($costLikeKeys, array_keys($service->getAttributes())))->toBeEmpty();
+    }
+
+    app(BranchContext::class)->clear();
+});
+
+/**
+ * PT2 — Tidak ada "endpoint" back-office (SaleResource) yang mengekspos
+ * `unit_cost_snapshot`/margin ke peran manapun (P6 — disaring di lapisan
+ * skema/query, bukan disembunyikan di tampilan).
+ *
+ * Berbeda dari Inventory (T3.3, permission `view_stock_cost` +
+ * `getEloquentQuery()` penyaring kolom) — Sales BELUM punya UI yang
+ * menampilkan `sale_items` sama sekali (tidak ada halaman View/relation
+ * manager), jadi saat ini TIDAK ADA yang perlu disaring karena memang
+ * tidak pernah di-select/dirender di mana pun. Test ini adalah TRIPWIRE:
+ * scan teks mentah skema Table/Form (pola sama arsitektur test T5.7/T5.8
+ * yang membaca berkas apa adanya) — bila sesi mendatang menambahkan kolom
+ * biaya ke `SalesTable`/`SaleForm`, test ini GAGAL, memaksa penambahan
+ * gerbang permission `view_sale_cost` + filter query (pola T3.3) saat itu
+ * juga, bukan lolos diam-diam.
+ */
+it('PT2 — skema back-office penjualan (SalesTable/SaleForm) tidak pernah menyebut kolom biaya/margin', function () {
+    $tableSource = file_get_contents(app_path('Presentation/Filament/Resources/Sales/Tables/SalesTable.php'));
+    $formSource = file_get_contents(app_path('Presentation/Filament/Resources/Sales/Schemas/SaleForm.php'));
+
+    expect($tableSource)->not->toBeFalse()->and($formSource)->not->toBeFalse();
+
+    foreach (['unit_cost', 'cost_amount', 'margin', 'purchase_price'] as $needle) {
+        expect($tableSource)->not->toContain($needle)
+            ->and($formSource)->not->toContain($needle);
+    }
+});
+
+/**
+ * PT5 — Kasir (PERAN NYATA, via PermissionSeeder) ditolak membatalkan
+ * penjualan final. `SalePolicyTest` sudah membuktikan mekanisme
+ * `void_sale` generik (permission ad-hoc) — test ini menutup rantai ke
+ * peran `kasir` SUNGGUHAN yang dipakai produksi.
+ */
+it('PT5 — Kasir (peran nyata) ditolak membatalkan penjualan final', function () {
+    $branch = Branch::factory()->create();
+    $kasir = User::factory()->for($branch, 'defaultBranch')->create();
+    $kasir->assignRole('kasir');
+
+    $sale = Sale::factory()->create([
+        'branch_id' => $branch->id,
+        'state' => DocumentState::Final,
+        'finalized_at' => now(),
+    ]);
+
+    expect($kasir->can('void_sale'))->toBeFalse()
+        ->and((new SalePolicy)->void($kasir, $sale))->toBeFalse();
+});
+
+/**
+ * PT7/PT13 — diskon POS Kasir (PERAN NYATA) melebihi TH1 (Rp100.000)
+ * membuat dokumen tetap draft dan menerbitkan Approval tertunda (AP-01),
+ * BUKAN diterapkan langsung maupun ditolak keras. `FinalizeSaleActionTest`
+ * sudah membuktikan mekanisme ambang dengan `makeTestUser(['create_sale'])`
+ * — test ini menutup rantai ke peran `kasir` SUNGGUHAN, dan membuktikan
+ * Kasir sendiri tidak berwenang menyetujui diskonnya sendiri
+ * (`manage_sale_discount` bukan permission Kasir).
+ */
+it('PT7/PT13 — diskon Kasir (peran nyata) Rp150.000 > TH1 membuat Approval tertunda, bukan diterapkan langsung', function () {
+    $branch = Branch::factory()->create();
+    $kasir = User::factory()->for($branch, 'defaultBranch')->create();
+    $kasir->assignRole('kasir');
+    $this->actingAs($kasir);
+
+    $shift = CashierShift::factory()->create(['branch_id' => $branch->id, 'cashier_id' => $kasir->id]);
+    $service = Service::factory()->create(['price' => '500000.00']);
+    $sale = Sale::factory()->create([
+        'branch_id' => $branch->id,
+        'cashier_shift_id' => $shift->id,
+        'discount_amount' => '150000.00',
+    ]);
+    $sale->items()->create(['service_id' => $service->id, 'quantity' => '1.0000', 'unit_price' => '500000.00']);
+    $sale->payments()->create(['method' => 'cash', 'amount' => '350000.00']);
+
+    $result = app(FinalizeSaleAction::class)->execute($sale);
+
+    expect($result->state)->toBe(DocumentState::Draft)
+        ->and($result->document_number)->toBeNull();
+
+    $approval = Approval::query()
+        ->where('approvable_type', $sale->getMorphClass())
+        ->where('approvable_id', $sale->id)
+        ->sole();
+
+    expect($approval->status)->toBe(ApprovalStatus::Pending)
+        ->and($approval->requested_by)->toBe($kasir->id)
+        ->and($kasir->can('manage_sale_discount'))->toBeFalse();
+});
+
+/**
+ * PT14 (TA2) — diskon dipecah ke DUA baris (mis. Rp60.000 + Rp60.000)
+ * tetap ditegakkan pada TOTAL transaksi, bukan lolos per baris. Struktur
+ * data sendiri sudah mencegah ini — `discount_amount` adalah SATU kolom
+ * di level dokumen `Sale` (dikonfirmasi: `sale_items` TIDAK PERNAH punya
+ * kolom diskon sendiri) — jadi memecah diskon ke beberapa baris justru
+ * tidak mengubah apa pun; harus tetap digabung jadi satu nilai di sini.
+ */
+it('PT14 — diskon dipecah dua baris tetap ditegakkan pada TOTAL transaksi (TA2)', function () {
+    expect(Schema::hasColumn('sale_items', 'discount_amount'))->toBeFalse();
+
+    $branch = Branch::factory()->create();
+    $kasir = User::factory()->for($branch, 'defaultBranch')->create();
+    $kasir->assignRole('kasir');
+    $this->actingAs($kasir);
+
+    $shift = CashierShift::factory()->create(['branch_id' => $branch->id, 'cashier_id' => $kasir->id]);
+    $serviceA = Service::factory()->create(['price' => '200000.00']);
+    $serviceB = Service::factory()->create(['price' => '200000.00']);
+
+    // Rp60.000 (baris A) + Rp60.000 (baris B) digabung menjadi SATU nilai
+    // Rp120.000 di level dokumen — melebihi TH1 (Rp100.000).
+    $sale = Sale::factory()->create([
+        'branch_id' => $branch->id,
+        'cashier_shift_id' => $shift->id,
+        'discount_amount' => '120000.00',
+    ]);
+    $sale->items()->create(['service_id' => $serviceA->id, 'quantity' => '1.0000', 'unit_price' => '200000.00']);
+    $sale->items()->create(['service_id' => $serviceB->id, 'quantity' => '1.0000', 'unit_price' => '200000.00']);
+    $sale->payments()->create(['method' => 'cash', 'amount' => '280000.00']);
+
+    $result = app(FinalizeSaleAction::class)->execute($sale);
+
+    expect($result->state)->toBe(DocumentState::Draft);
+
+    expect(Approval::query()
+        ->where('approvable_type', $sale->getMorphClass())
+        ->where('approvable_id', $sale->id)
+        ->where('status', ApprovalStatus::Pending)
+        ->exists())->toBeTrue();
+});
