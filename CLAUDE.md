@@ -424,6 +424,23 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 | ~~**T4.2** — TH1/TH2 (diskon) ditegakkan pada TOTAL, bukan per baris~~ | ✅ Ditegakkan T4.2 — §10 eksplisit; tanpanya diskon tinggal dipecah per baris untuk lolos approval — sama pola TH3/TH3b yang sudah ditegakkan T3.5. `discount_amount` tetap satu kolom di level dokumen `Sale` (bukan per `sale_items`), jadi struktur data sendiri sudah mencegah pemecahan per baris |
 | ~~**T4.3** — AC-18: retur kembali pada nilai HPP batch asal, bukan harga jual~~ | ✅ Ditegakkan T4.3 — `FinalizeSaleReturnAction` mengambil `unit_cost` dari `sale_items.unit_cost_snapshot` (bukan `unit_price`) untuk `StockLedgerService::receive()` |
 
+### Fase 5 — Procurement + Kas + Sinkronisasi
+
+> **Peringatan penomoran (sama seperti Fase 2/3/4):** `HS-TASKS-RIGHTCLICK-v1.1`/`HS-DB-RIGHTCLICK-v1.0` tetap tidak ada di repositori (dikonfirmasi ulang sebelum menyusun daftar ini). T5.1–T5.10 di bawah diturunkan sendiri dari §3/§11 dokumen ini ("PO, penerimaan, faktur, hutang, kas, piutang, outbox, sync API" + dua simpul kritis T5.2/T5.7 yang sudah ditandai sejak §11 versi sebelumnya), sama seperti T2.x–T4.x. Kode prefix dokumen baru (PO, penerimaan, faktur) dan desain tabel hutang/piutang **belum diverifikasi terhadap dokumen sumber** — akan self-derived saat task terkait dikerjakan, dicatat eksplisit di migration/enum seperti pola fase-fase sebelumnya. Dua ketidakpastian desain diketahui SEBELUM mulai coding (bukan baru ditemukan saat implementasi): (1) T5.2 mungkin perlu digabung jadi satu task (pola T4.1, Sale+CashierShift) karena penerimaan barang dan faktur pembelian saling bergantung untuk menentukan nilai batch final; (2) T5.5 (piutang penuh) desain tabelnya belum jelas dari CLAUDE.md — T4.2 hanya menyebut piutang parsial ditunda ke sini, tanpa merinci bentuk tabelnya.
+
+| ID | Status | Catatan |
+|---|---|---|
+| T5.1 | ⬜ Belum mulai | `purchase_orders` + `purchase_order_lines` + `PurchaseOrderPolicy` + draft→final→void + TH4 (approval Owner di atas Rp10.000.000, §10) |
+| T5.2 | ⬜ Belum mulai | **Simpul kritis.** `goods_receipts`+lines dan `purchase_invoices`+lines — `unit_cost` batch **TERMASUK PPN** dari nilai faktur → `StockLedgerService::receive()`. Salah ambil nilai DPP = seluruh HPP terlalu rendah, margin dilaporkan lebih besar dari kenyataan. Kemungkinan digabung jadi satu task (lihat catatan di atas) |
+| T5.3 | ⬜ Belum mulai | Hutang (accounts payable) — pembayaran atas `purchase_invoices`, cicilan/parsial, saldo hutang per partner |
+| T5.4 | ⬜ Belum mulai | Kas (`cash_entries`) — AC-21: kas keluar tanpa referensi dokumen **ditolak**. Menyambungkan kas masuk (`sale_payments` tunai, T4.1) dan kas keluar (pembayaran hutang T5.3) ke satu ledger kas |
+| T5.5 | ⬜ Belum mulai | Piutang (accounts receivable) penuh — T4.2 sengaja menunda ini ke Fase 5 ("saldo untuk MVP cukup dilacak di `Sale` itu sendiri"). Desain tabel belum diputuskan — perlu keputusan eksplisit di awal task (tabel `receivables` terpisah vs perluasan `sales.balance_due`) |
+| T5.6 | ⬜ Belum mulai | Filament Resource untuk PO/Penerimaan/Faktur/Hutang/Kas/Piutang, grup navigasi baru ("Procurement" / "Kas") |
+| T5.7 | ⬜ Belum mulai | **Simpul kritis.** `outbox_events` (LOCAL) + penulisan dalam TRANSAKSI YANG SAMA dengan tiap dokumen final SYNCED. Di luar transaksi = dokumen final hilang tanpa jejak ke HQ. Kemungkinan besar butuh RETROFIT ke action finalize yang sudah ada (`FinalizeSaleAction`, `FinalizeStockAdjustmentAction`, `FinalizeStockOpnameAction`, dst dari Fase 3–4), bukan cuma task baru berdiri sendiri |
+| T5.8 | ⬜ Belum mulai | Sync API — 6 endpoint §8 (`/sync/events`, `/ack`, `/health`, `/master-check`, `/master-snapshot/{table}`, `/partner-upsert`), token per node via VPN, 4 status hasil (`accepted`/`duplicate`/`deferred`/`rejected`), `processed_events` idempotency key. Worker dibatasi 1 proses (B7/H1, i3-7100 2 core) — relevan untuk desain consumer sync |
+| T5.9 | ⬜ Belum mulai | Menutup PT1/PT2/PT5/PT7/PT13/PT14 (otorisasi negatif, ditunda sejak T1.13 → Sales) — sekarang bisa ditutup karena Sale/CashierShift/SaleReturn sudah ada sejak Fase 4 |
+| T5.10 | ⬜ Belum mulai | Architecture test data-driven (resource Procurement/Kas, pola T2.10/T3.8/T4.5) + full test suite + PHPStan level 6 + Pint — penutup fase |
+
 ---
 
 ## 12. Acceptance Criteria — Kunci
