@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence\Models;
 
+use App\Domain\Sales\Enums\PaymentStatus;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Infrastructure\Persistence\Concerns\Auditable;
 use App\Infrastructure\Persistence\Concerns\BelongsToBranch;
@@ -14,6 +15,7 @@ use Database\Factories\Infrastructure\Persistence\Models\PurchaseInvoiceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -30,6 +32,15 @@ use Illuminate\Support\Carbon;
  *
  * `invoice_number`/`invoice_date` adalah identitas PADA FAKTUR FISIK
  * PEMASOK — beda dari `document_number` (nomor internal RIGHTCLICK).
+ *
+ * `amount_paid`/`balance_due`/`payment_status` (T5.3) SENGAJA TIDAK
+ * tersimpan sebagai kolom — dokumen ini menerima `purchase_payments`
+ * (cicilan) DARI WAKTU KE WAKTU setelah `state=final`, dan `HasDocumentState`
+ * menolak perubahan field apa pun pada dokumen final selain transisi void.
+ * Saldo hutang DIHITUNG dari `payments()->sum('amount')` vs `total_amount`
+ * — pola sama `stock_balances` sebagai cache turunan `stock_mutations`
+ * (R1), diterapkan ke konteks finansial. Lihat `amountPaid()`/`balanceDue()`/
+ * `paymentStatus()`.
  *
  * @property string $branch_id
  * @property string $goods_receipt_id
@@ -102,5 +113,65 @@ class PurchaseInvoice extends Model
     public function goodsReceipt(): BelongsTo
     {
         return $this->belongsTo(GoodsReceipt::class);
+    }
+
+    /**
+     * @return HasMany<PurchasePayment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(PurchasePayment::class);
+    }
+
+    /**
+     * Total yang sudah dibayarkan — SUM `purchase_payments.amount`, bukan
+     * kolom tersimpan (lihat docblock kelas).
+     */
+    public function amountPaid(): string
+    {
+        return (string) $this->payments()->sum('amount');
+    }
+
+    public function balanceDue(): string
+    {
+        return bcsub((string) $this->total_amount, $this->amountPaid(), 2);
+    }
+
+    public function paymentStatus(): PaymentStatus
+    {
+        $paid = $this->amountPaid();
+
+        if (bccomp($paid, '0', 2) <= 0) {
+            return PaymentStatus::Unpaid;
+        }
+
+        if (bccomp($paid, (string) $this->total_amount, 2) >= 0) {
+            return PaymentStatus::Paid;
+        }
+
+        return PaymentStatus::Partial;
+    }
+
+    /**
+     * Saldo hutang total ke satu pemasok di satu cabang — SUM `balanceDue()`
+     * atas seluruh faktur FINAL (non-void) milik pemasok tersebut. Dasar
+     * "saldo hutang per partner" (T5.3); laporan/Filament penuh (T5.6) akan
+     * membangun di atas primitif ini, bukan menghitung ulang dari nol.
+     */
+    public static function outstandingBalanceForPartner(string $branchId, string $partnerId): string
+    {
+        $invoices = self::query()
+            ->where('branch_id', $branchId)
+            ->where('partner_id', $partnerId)
+            ->where('state', DocumentState::Final)
+            ->get();
+
+        $total = '0';
+
+        foreach ($invoices as $invoice) {
+            $total = bcadd($total, $invoice->balanceDue(), 2);
+        }
+
+        return $total;
     }
 }

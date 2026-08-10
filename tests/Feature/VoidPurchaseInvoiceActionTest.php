@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Application\Actions\FinalizeGoodsReceiptAction;
 use App\Application\Actions\FinalizePurchaseInvoiceAction;
+use App\Application\Actions\RecordPurchasePaymentAction;
 use App\Application\Actions\VoidPurchaseInvoiceAction;
+use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Domain\Shared\Exceptions\DocumentStateException;
 use App\Infrastructure\Persistence\Models\Branch;
@@ -22,7 +24,7 @@ beforeEach(function () {
     $this->branch = Branch::factory()->create();
     $this->supplier = Partner::factory()->create();
     $this->product = Product::factory()->create();
-    $this->actingAs(makeTestUser(['perform_goods_receipt', 'approve_goods_receipt']));
+    $this->actingAs(makeTestUser(['perform_goods_receipt', 'approve_goods_receipt', 'record_cash_entry']));
 });
 
 afterEach(function () {
@@ -62,4 +64,22 @@ it('menolak void tanpa alasan', function () {
 
     expect(fn () => $this->voidAction->execute($finalizedInvoice, ''))
         ->toThrow(DocumentStateException::class);
+});
+
+it('T5.3 — menolak void bila faktur sudah menerima pembayaran', function () {
+    $gr = GoodsReceipt::factory()->create(['branch_id' => $this->branch->id, 'partner_id' => $this->supplier->id]);
+    $gr->lines()->create(['product_id' => $this->product->id, 'quantity' => '5.0000', 'unit_cost' => '20000.00']);
+    $finalizedGr = $this->finalizeGr->execute($gr);
+
+    $invoice = PurchaseInvoice::factory()->create([
+        'branch_id' => $this->branch->id,
+        'goods_receipt_id' => $finalizedGr->id,
+        'partner_id' => $this->supplier->id,
+    ]);
+    $finalizedInvoice = $this->finalizeInvoice->execute($invoice);
+
+    app(RecordPurchasePaymentAction::class)->execute($finalizedInvoice, ['method' => 'cash', 'amount' => '10000.00']);
+
+    expect(fn () => $this->voidAction->execute($finalizedInvoice->fresh(), 'Coba batalkan'))
+        ->toThrow(PurchaseInvoiceValidationException::class);
 });
