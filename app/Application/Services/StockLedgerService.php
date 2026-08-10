@@ -49,8 +49,9 @@ final class StockLedgerService
     /**
      * Terbitkan batch baru dan mutasi penambahan (R2 — `unitCost` TERMASUK
      * PPN). Dipakai untuk penerimaan opname/opening balance (T3.4),
-     * penyesuaian naik (T3.5), penerimaan transfer (T3.6), kelak goods
-     * receipt (T5.2).
+     * penyesuaian naik (T3.5), penerimaan transfer (T3.6), goods receipt
+     * (T5.2, `FinalizeGoodsReceiptAction` — dokumen inilah yang memanggil
+     * ini, BUKAN `purchase_invoices`).
      */
     public function receive(
         Branch $branch,

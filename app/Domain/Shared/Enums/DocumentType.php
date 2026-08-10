@@ -28,8 +28,16 @@ namespace App\Domain\Shared\Enums;
  * (self-derived). T5.1 menambah `PurchaseOrder` → `PO` (self-derived, dua
  * huruf — beda pola dari yang lain karena "purchase order" secara umum
  * disingkat begitu, bukan tiga huruf diambil dari nama Indonesia seperti
- * ADJ/OPN; direkonsiliasi bila `HS-DB-RIGHTCLICK-v1.0` tersedia). Kode
- * prefix untuk `gr`/faktur (T5.2) masih belum ditetapkan.
+ * ADJ/OPN; direkonsiliasi bila `HS-DB-RIGHTCLICK-v1.0` tersedia). T5.2
+ * menambah `GoodsReceipt` → `PB` (self-derived, "Penerimaan Barang" — pola
+ * Indonesia dua huruf, KEMBALI ke gaya ADJ/OPN, bukan gaya `PO`; disengaja
+ * inkonsisten antara T5.1 dan T5.2 karena "PO" adalah istilah yang dipakai
+ * apa adanya dalam bahasa Indonesia sehari-hari toko, sedangkan "goods
+ * receipt" tidak — direkonsiliasi bersama seluruh prefix self-derived
+ * lainnya) dan `PurchaseInvoice` → `INV` (self-derived, tiga huruf dari
+ * "invoice" — sengaja BUKAN "FP" untuk menghindari kerancuan dengan
+ * "Faktur Pajak", istilah pajak yang tidak relevan bagi HAEN KOMPUTER yang
+ * non-PKP, R2).
  */
 enum DocumentType: string
 {
@@ -41,6 +49,8 @@ enum DocumentType: string
     case CashierShift = 'cashier_shift';
     case SaleReturn = 'sale_return';
     case PurchaseOrder = 'purchase_order';
+    case GoodsReceipt = 'goods_receipt';
+    case PurchaseInvoice = 'purchase_invoice';
 
     /**
      * Kode tiga huruf pada nomor dokumen tercetak.
@@ -56,6 +66,8 @@ enum DocumentType: string
             self::CashierShift => 'SFT',
             self::SaleReturn => 'RET',
             self::PurchaseOrder => 'PO',
+            self::GoodsReceipt => 'PB',
+            self::PurchaseInvoice => 'INV',
         };
     }
 
@@ -70,6 +82,8 @@ enum DocumentType: string
             self::CashierShift => 'Shift Kasir',
             self::SaleReturn => 'Retur Penjualan',
             self::PurchaseOrder => 'Purchase Order',
+            self::GoodsReceipt => 'Penerimaan Barang',
+            self::PurchaseInvoice => 'Faktur Pembelian',
         };
     }
 }

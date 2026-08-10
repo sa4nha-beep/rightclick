@@ -41,6 +41,38 @@ class PermissionSeeder extends Seeder
      * Sales (`void_sale`) dan Inventory (`void_stock_document`) sudah punya
      * ini sejak T1.5; Procurement terlewat. Ditambahkan di T5.1, lihat
      * `PurchaseOrderPolicy::void()`.
+     *
+     * Disambiguasi permission goods receipt (T5.2) — TIDAK ada permission
+     * baru ditambahkan di sini, tapi 4 permission yang sudah diseed T1.5
+     * ternyata SALING TUMPANG TINDIH secara nama dan perlu keputusan
+     * eksplisit: `perform_goods_receipt`/`review_goods_receipt` (Inventory)
+     * DAN `view_goods_receipt`/`approve_goods_receipt` (Procurement) —
+     * empat permission untuk SATU konsep dunia nyata yang sama, diseed di
+     * dua domain berbeda sebelum modelnya ada. Secara fungsional
+     * `review_goods_receipt` dan `approve_goods_receipt` berujung ke
+     * Admin/Owner yang SAMA persis (filter `adminPermissions` di bawah
+     * tidak mengecualikan keduanya) — tidak ada perbedaan siapa yang punya
+     * akses, jadi keduanya HARUS diberi peran fungsional yang berbeda
+     * secara sengaja, bukan dibiarkan sama-sama menggerbang hal yang sama.
+     * Keputusan (`GoodsReceiptPolicy`/`PurchaseInvoicePolicy`, T5.2):
+     *   - `perform_goods_receipt` → create()/finalize() `GoodsReceipt` (Gudang,
+     *     tanpa ambang — §10 tidak menetapkan TH untuk goods receipt).
+     *   - `review_goods_receipt` → void() `GoodsReceipt` — Admin/Owner
+     *     meninjau/membatalkan sisi FISIK yang sudah dicatat Gudang, pola
+     *     sama `void_stock_document` untuk adjustment/opname/transfer.
+     *   - `view_goods_receipt` → viewAny()/view() KEDUA dokumen
+     *     (`GoodsReceipt` DAN `PurchaseInvoice`) — dipakai sebagai payung
+     *     baca bersama karena keduanya merepresentasikan SATU peristiwa
+     *     penerimaan barang dari dua sisi (fisik vs finansial).
+     *   - `approve_goods_receipt` → create()/finalize()/void() `PurchaseInvoice`
+     *     — Admin/Owner mencatat sisi FINANSIAL/AP secara formal SETELAH
+     *     Gudang memfinalisasi sisi fisik, mirip `approve_purchase_order`
+     *     untuk PO tapi TANPA alur ambang (`ApprovalService`) — di sini
+     *     permission langsung menggerbang aksinya, bukan pemicu AP-01.
+     * Ditandai eksplisit untuk direkonsiliasi terhadap
+     * `HS-PERM-RIGHTCLICK-v1.2` bila tersedia — kemungkinan salah satu dari
+     * empat permission ini akan terbukti redundan setelah dokumen asli
+     * ditinjau, bukan diam-diam dianggap final.
      */
     public function run(): void
     {
