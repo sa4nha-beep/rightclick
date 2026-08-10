@@ -1,0 +1,40 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Application\Actions;
+
+use App\Application\Services\DocumentStateService;
+use App\Application\Services\StockLedgerService;
+use App\Infrastructure\Persistence\Models\Sale;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Void penjualan final (T4.1, R4). Sama pola dengan
+ * `VoidStockAdjustmentAction` — mengembalikan barang ke stok lewat mutasi
+ * berlawanan (bukan menghapus mutasi lama, DB Design §8.3), lalu
+ * memfinalisasi status void.
+ *
+ * TIDAK menyesuaikan ulang `cashier_shifts.closing_cash_expected`/
+ * `variance` bila shift terkait sudah ditutup sebelum void ini terjadi —
+ * keterbatasan yang didokumentasikan, bukan kelalaian: rekonsiliasi shift
+ * pasca-tutup adalah kasus tepi yang ditunda (lih. `FinalizeSaleAction`
+ * untuk gap T4.1 lain yang serupa gaya pendokumentasiannya).
+ */
+final class VoidSaleAction
+{
+    public function __construct(
+        private readonly DocumentStateService $documentStates,
+        private readonly StockLedgerService $stockLedger,
+    ) {}
+
+    public function execute(Sale $sale, string $reason): Sale
+    {
+        return DB::transaction(function () use ($sale, $reason) {
+            $this->stockLedger->reverseForReference($sale, $sale);
+            $this->documentStates->void($sale, $reason);
+
+            return $sale->fresh();
+        });
+    }
+}

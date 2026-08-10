@@ -23,8 +23,9 @@ namespace App\Domain\Shared\Enums;
  * diselederivasi karena `HS-TASKS-RIGHTCLICK-v1.1`/`HS-DB-RIGHTCLICK-v1.0`
  * tidak ada di repositori (lihat CLAUDE.md §11 catatan Fase 2/3). Ditandai
  * eksplisit untuk direkonsiliasi terhadap dokumen asli bila tersedia —
- * BUKAN diam-diam dianggap final. Kode prefix untuk `po`/`gr`/retur (T5.x)
- * masih belum ditetapkan.
+ * BUKAN diam-diam dianggap final. T4.1 menambah `CashierShift` → `SFT`
+ * (self-derived, sama alasan). T4.3 menambah `SaleReturn` → `RET`
+ * (self-derived). Kode prefix untuk `po`/`gr` (T5.x) masih belum ditetapkan.
  */
 enum DocumentType: string
 {
@@ -33,6 +34,8 @@ enum DocumentType: string
     case Adjustment = 'adjustment';
     case TransferDispatch = 'transfer_dispatch';
     case TransferReceipt = 'transfer_receipt';
+    case CashierShift = 'cashier_shift';
+    case SaleReturn = 'sale_return';
 
     /**
      * Kode tiga huruf pada nomor dokumen tercetak.
@@ -45,6 +48,8 @@ enum DocumentType: string
             self::Adjustment => 'ADJ',
             self::TransferDispatch => 'TRO',
             self::TransferReceipt => 'TRI',
+            self::CashierShift => 'SFT',
+            self::SaleReturn => 'RET',
         };
     }
 
@@ -56,6 +61,8 @@ enum DocumentType: string
             self::Adjustment => 'Penyesuaian Stok',
             self::TransferDispatch => 'Transfer Keluar',
             self::TransferReceipt => 'Transfer Masuk',
+            self::CashierShift => 'Shift Kasir',
+            self::SaleReturn => 'Retur Penjualan',
         };
     }
 }

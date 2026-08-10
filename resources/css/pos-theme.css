@@ -1,0 +1,62 @@
+/*
+  RIGHTCLICK — POS (App\Presentation\Pos, T4.4).
+
+  Entry Vite TERPISAH dari `resources/css/app.css` — POS bukan bagian dari
+  panel Filament (lihat catatan `AdminPanelProvider`/`filament-theme.css`:
+  "POS adalah Livewire terpisah"). Font Inter + token warna HAEN dipakai
+  ULANG dari `resources/fonts/fonts.css` (sama sumber dengan tema Filament)
+  supaya kedua permukaan konsisten tanpa duplikasi @font-face.
+
+  PV7 — "Tanpa animasi transisi pada POS": kasir menekan tombol berkali-kali
+  per menit, transisi apa pun (bahkan yang halus) terasa sebagai lag pada
+  alur kerja berkecepatan tinggi ini. Diterapkan LUAS ke seluruh elemen di
+  dalam wrapper `.pos-root`, bukan hanya kelas Tailwind `transition-*` yang
+  sengaja dihindari di Blade — proteksi ganda terhadap komponen pihak
+  ketiga (mis. Alpine `x-transition`) yang mungkin luput.
+*/
+
+@import 'tailwindcss';
+@import '../fonts/fonts.css';
+
+@source '../../app/Presentation/Pos/**/*';
+@source '../views/pos/**/*.blade.php';
+@source '../views/layouts/pos.blade.php';
+
+.pos-root, .pos-root * {
+  transition: none !important;
+  animation: none !important;
+}
+
+.pos-root {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--haen-white);
+  color: var(--haen-black);
+}
+
+/*
+ * Kontras: teks cyan di atas putih DILARANG untuk isi (HS-UI §2.1, rasio
+ * hanya ~2,6:1) — cyan di sini HANYA dipakai sebagai `background-color`
+ * tombol aksi (teks putih di atasnya, rasio 4,6:1) atau garis aksen tipis,
+ * tidak pernah sebagai warna teks langsung.
+ */
+.pos-btn-primary {
+  background-color: var(--haen-cyan);
+  color: var(--haen-white);
+}
+
+.pos-btn-primary:hover {
+  background-color: var(--haen-cyan-hover);
+}
+
+.pos-btn-primary:disabled {
+  background-color: var(--haen-gray-300);
+  color: var(--haen-gray-600);
+  cursor: not-allowed;
+}
+
+.pos-badge-out-of-stock {
+  background-color: var(--state-danger);
+  color: var(--haen-white);
+}

@@ -183,3 +183,26 @@ it('setiap entitas Inventory Core Fase 3 memiliki Filament Resource yang menunju
     ['App\Presentation\Filament\Resources\StockTransfers\StockTransferResource', 'App\Infrastructure\Persistence\Models\StockTransfer'],
     ['App\Presentation\Filament\Resources\StockTransferReceipts\StockTransferReceiptResource', 'App\Infrastructure\Persistence\Models\StockTransferReceipt'],
 ]);
+
+/**
+ * T4.5 — sama pola dengan T2.10/T3.8, diperluas untuk entitas Sales & POS
+ * Fase 4 (penjualan, shift kasir, retur). `SaleItem`/`SalePayment`/
+ * `SaleReturnLine` SENGAJA TIDAK terdaftar di sini — sama seperti
+ * `StockAdjustmentLine` di T3.8, baris anak dikelola lewat Repeater
+ * `relationship()` pada Resource induknya, bukan Resource independen
+ * (tidak ada API tulis independen — `*Policy` masing-masing menegaskan
+ * create/update/delete selalu `false`). POS sendiri (`App\Presentation\Pos`,
+ * T4.4) SENGAJA di luar cakupan test ini — bukan `Filament\Resources\Resource`
+ * sama sekali (halaman Livewire mandiri di luar panel).
+ */
+it('setiap entitas Sales & POS Fase 4 memiliki Filament Resource yang menunjuk model yang benar', function (string $resourceClass, string $modelClass) {
+    expect(class_exists($resourceClass))->toBeTrue("{$resourceClass} tidak ditemukan.");
+    expect(is_subclass_of($resourceClass, Filament\Resources\Resource::class))->toBeTrue(
+        "{$resourceClass} bukan turunan Filament\\Resources\\Resource.",
+    );
+    expect($resourceClass::getModel())->toBe($modelClass);
+})->with([
+    ['App\Presentation\Filament\Resources\Sales\SaleResource', 'App\Infrastructure\Persistence\Models\Sale'],
+    ['App\Presentation\Filament\Resources\CashierShifts\CashierShiftResource', 'App\Infrastructure\Persistence\Models\CashierShift'],
+    ['App\Presentation\Filament\Resources\SaleReturns\SaleReturnResource', 'App\Infrastructure\Persistence\Models\SaleReturn'],
+]);

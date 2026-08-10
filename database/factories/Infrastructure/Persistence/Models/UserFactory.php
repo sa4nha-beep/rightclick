@@ -2,6 +2,7 @@
 
 namespace Database\Factories\Infrastructure\Persistence\Models;
 
+use App\Infrastructure\Persistence\Models\Branch;
 use App\Infrastructure\Persistence\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -31,6 +32,13 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'password' => static::$password ??= Hash::make('password'),
             'is_active' => true,
+            // `users.default_branch_id` NOT NULL (T1.4) — sebelum T4.1 tidak
+            // ada factory lain yang me-rantai User::factory() bare (seluruh
+            // test Fase 1-3 memakai helper `makeTestUser()` yang mengisi ini
+            // eksplisit). `CashierShiftFactory` (T4.1) adalah rantai pertama
+            // (Sale -> CashierShift -> User) yang membuat User lewat factory
+            // murni, menyingkap gap ini.
+            'default_branch_id' => Branch::factory(),
         ];
     }
 

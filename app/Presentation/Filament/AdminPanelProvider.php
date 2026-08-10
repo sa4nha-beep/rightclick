@@ -10,10 +10,12 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -115,6 +117,22 @@ class AdminPanelProvider extends PanelProvider
                 in: app_path('Presentation/Filament/Widgets'),
                 for: 'App\Presentation\Filament\Widgets',
             )
+            // T4.5 — tautan balik ke POS (T4.4, `App\Presentation\Pos`,
+            // route `/pos`) dari sidebar back office, simetris dengan
+            // tautan "Kembali ke Back Office" pada `pos.terminal` view.
+            // BUKAN `Filament\Resources\Resource`/halaman panel — POS ada
+            // DI LUAR panel ini sepenuhnya, jadi item navigasi kustom yang
+            // menunjuk URL biasa adalah satu-satunya cara menautkannya dari
+            // sidebar. Digerbang `create_sale` — permission yang sama
+            // dipakai `PosTerminal::mount()` sendiri, supaya tautan yang
+            // tampak tidak pernah membawa pengguna ke halaman 403.
+            ->navigationItems([
+                NavigationItem::make('Buka POS')
+                    ->url('/pos')
+                    ->icon(Heroicon::OutlinedComputerDesktop)
+                    ->group('Penjualan')
+                    ->visible(fn (): bool => auth()->user()?->can('create_sale') ?? false),
+            ])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
