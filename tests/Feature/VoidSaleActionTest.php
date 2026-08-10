@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Application\Actions\FinalizeSaleAction;
 use App\Application\Actions\VoidSaleAction;
+use App\Application\Services\CashLedgerService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockMutationType;
 use App\Domain\Shared\Enums\DocumentState;
@@ -48,4 +49,23 @@ it('void mengembalikan stok yang terjual (mutasi berlawanan)', function () {
 
     expect($voided->state)->toBe(DocumentState::Void)
         ->and($this->ledger->availableQuantity($this->branch, $this->product))->toEqual('10.0000');
+});
+
+it('T5.4 — void membalik CashEntry kas masuk (pembayaran tunai)', function () {
+    DB::transaction(fn () => $this->ledger->receive(
+        $this->branch, $this->product, '10.0000', '5000.00', now(), Branch::factory()->create(), StockMutationType::Receipt,
+    ));
+
+    $sale = Sale::factory()->create(['branch_id' => $this->branch->id, 'cashier_shift_id' => $this->shift->id]);
+    $sale->items()->create(['product_id' => $this->product->id, 'quantity' => '4.0000', 'unit_price' => '9000.00']);
+    $sale->payments()->create(['method' => 'cash', 'amount' => '36000.00']);
+
+    $finalized = $this->finalizeAction->execute($sale);
+
+    $cashLedger = app(CashLedgerService::class);
+    expect($cashLedger->balance($this->branch))->toEqual('36000.00');
+
+    $this->voidAction->execute($finalized, 'Salah input kasir');
+
+    expect($cashLedger->balance($this->branch))->toEqual('0.00');
 });

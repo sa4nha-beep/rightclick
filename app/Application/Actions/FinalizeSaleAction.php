@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Application\Actions;
 
 use App\Application\Services\ApprovalService;
+use App\Application\Services\CashLedgerService;
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
 use App\Application\Services\StockLedgerService;
+use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Inventory\Enums\StockMutationType;
+use App\Domain\Sales\Enums\PaymentMethod;
 use App\Domain\Sales\Enums\PaymentStatus;
 use App\Domain\Sales\Exceptions\SaleValidationException;
 use App\Domain\Shared\Enums\DocumentState;
@@ -48,6 +51,12 @@ use Illuminate\Support\Facades\DB;
  *
  * Baris jasa (`service_id` terisi) TIDAK menyentuh `StockLedgerService` sama
  * sekali — jasa bukan barang, tidak ada mutasi stok atau COGS.
+ *
+ * `CashLedgerService` (T5.4 retrofit): setiap `sale_payments.method='cash'`
+ * menerbitkan satu `CashEntry` kas MASUK yang merujuk `Sale` ini (bukan
+ * baris `SalePayment` individual — pola sama `stock_mutations` yang selalu
+ * menunjuk dokumen induk). Pembayaran non-tunai (kartu/transfer/QRIS) TIDAK
+ * menyentuh kas fisik, jadi TIDAK menulis `CashEntry` sama sekali.
  */
 final class FinalizeSaleAction
 {
@@ -56,6 +65,7 @@ final class FinalizeSaleAction
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
         private readonly ApprovalService $approvals,
+        private readonly CashLedgerService $cashLedger,
     ) {}
 
     public function execute(Sale $sale): Sale
@@ -118,6 +128,20 @@ final class FinalizeSaleAction
         $sale->total_amount = $totalAmount;
         $sale->document_number = $this->documentNumbers->next(DocumentType::Sale, $sale->branch);
         $sale->save();
+
+        foreach ($sale->payments as $payment) {
+            if ($payment->method !== PaymentMethod::Cash) {
+                continue;
+            }
+
+            $this->cashLedger->record(
+                $sale->branch,
+                (string) $payment->amount,
+                CashEntryType::SalePayment,
+                now(),
+                $sale,
+            );
+        }
 
         foreach ($sale->items as $item) {
             if ($item->product_id === null) {

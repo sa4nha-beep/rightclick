@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Application\Actions\FinalizeSaleAction;
 use App\Application\Services\StockLedgerService;
+use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Inventory\Enums\StockMutationType;
 use App\Domain\Sales\Enums\PaymentStatus;
 use App\Domain\Sales\Exceptions\SaleValidationException;
@@ -11,6 +12,7 @@ use App\Domain\Shared\Enums\ApprovalStatus;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Infrastructure\Persistence\Models\Approval;
 use App\Infrastructure\Persistence\Models\Branch;
+use App\Infrastructure\Persistence\Models\CashEntry;
 use App\Infrastructure\Persistence\Models\CashierShift;
 use App\Infrastructure\Persistence\Models\Partner;
 use App\Infrastructure\Persistence\Models\Product;
@@ -271,4 +273,39 @@ it('Owner dikecualikan dari TH1/TH2 — diskon besar tetap langsung difinalisasi
     $result = $this->action->execute($sale);
 
     expect($result->state)->toBe(DocumentState::Final);
+});
+
+it('T5.4 — pembayaran tunai menerbitkan CashEntry kas masuk yang merujuk Sale', function () {
+    DB::transaction(fn () => app(StockLedgerService::class)->receive(
+        $this->branch, $this->product, '10.0000', '10000.00', now(), Branch::factory()->create(),
+        StockMutationType::Receipt,
+    ));
+
+    $sale = makeSaleWithProductLine($this->branch, $this->shift, $this->product, '1.0000', '15000.00');
+    $sale->payments()->create(['method' => 'cash', 'amount' => '15000.00']);
+
+    $result = $this->action->execute($sale);
+
+    $entry = CashEntry::query()
+        ->where('reference_type', $result->getMorphClass())
+        ->where('reference_id', $result->id)
+        ->sole();
+
+    expect($entry->entry_type)->toBe(CashEntryType::SalePayment)
+        ->and((string) $entry->amount)->toEqual('15000.00');
+});
+
+it('T5.4 — pembayaran non-tunai TIDAK menerbitkan CashEntry', function () {
+    DB::transaction(fn () => app(StockLedgerService::class)->receive(
+        $this->branch, $this->product, '10.0000', '10000.00', now(), Branch::factory()->create(),
+        StockMutationType::Receipt,
+    ));
+
+    $sale = makeSaleWithProductLine($this->branch, $this->shift, $this->product, '1.0000', '15000.00');
+    $sale->payments()->create(['method' => 'card', 'amount' => '15000.00']);
+
+    $result = $this->action->execute($sale);
+
+    expect(CashEntry::query()->where('reference_type', $result->getMorphClass())->where('reference_id', $result->id)->exists())
+        ->toBeFalse();
 });

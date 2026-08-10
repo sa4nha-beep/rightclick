@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Actions;
 
+use App\Application\Services\CashLedgerService;
+use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Domain\Sales\Enums\PaymentMethod;
 use App\Domain\Shared\Enums\DocumentState;
@@ -28,14 +30,18 @@ use Illuminate\Support\Facades\DB;
  * manfaat murni-kerapian untuk task ini. Ditandai eksplisit untuk
  * direkonsiliasi bersama pembersihan Domain lainnya.
  *
- * TIDAK menulis `cash_entries` (T5.4 belum ada) — penyambungan ke ledger
- * kas adalah pekerjaan T5.4 (lihat catatan Fase 5 §11 CLAUDE.md), yang
- * kemungkinan akan retrofit aksi ini untuk juga menulis kas keluar bila
- * `method=cash`, sama pola `outbox_events` (T5.7) akan retrofit seluruh
- * action finalize dokumen SYNCED.
+ * `CashLedgerService` (T5.4 retrofit): `method='cash'` menerbitkan satu
+ * `CashEntry` kas KELUAR yang merujuk `PurchaseInvoice` ini (BUKAN baris
+ * `PurchasePayment` individual — pola sama `FinalizeSaleAction`, entri kas
+ * selalu menunjuk dokumen induk). Pembayaran non-tunai TIDAK menyentuh kas
+ * fisik, jadi TIDAK menulis `CashEntry` sama sekali.
  */
 final class RecordPurchasePaymentAction
 {
+    public function __construct(
+        private readonly CashLedgerService $cashLedger,
+    ) {}
+
     /**
      * @param  array{method: string, amount: string, reference_no?: string|null}  $payment
      */
@@ -46,6 +52,8 @@ final class RecordPurchasePaymentAction
                 ->whereKey($purchaseInvoice->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $invoice->loadMissing('branch');
 
             if ($invoice->state !== DocumentState::Final) {
                 throw new PurchaseInvoiceValidationException(
@@ -69,11 +77,25 @@ final class RecordPurchasePaymentAction
                 ));
             }
 
-            return $invoice->payments()->create([
-                'method' => PaymentMethod::from($payment['method'])->value,
+            $method = PaymentMethod::from($payment['method']);
+
+            $purchasePayment = $invoice->payments()->create([
+                'method' => $method->value,
                 'amount' => $amount,
                 'reference_no' => $payment['reference_no'] ?? null,
             ]);
+
+            if ($method === PaymentMethod::Cash) {
+                $this->cashLedger->record(
+                    $invoice->branch,
+                    bcmul($amount, '-1', 2),
+                    CashEntryType::PurchasePayment,
+                    now(),
+                    $invoice,
+                );
+            }
+
+            return $purchasePayment;
         });
     }
 }

@@ -5,9 +5,12 @@ declare(strict_types=1);
 use App\Application\Actions\FinalizeGoodsReceiptAction;
 use App\Application\Actions\FinalizePurchaseInvoiceAction;
 use App\Application\Actions\RecordPurchasePaymentAction;
+use App\Application\Services\CashLedgerService;
+use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Domain\Sales\Enums\PaymentStatus;
 use App\Infrastructure\Persistence\Models\Branch;
+use App\Infrastructure\Persistence\Models\CashEntry;
 use App\Infrastructure\Persistence\Models\GoodsReceipt;
 use App\Infrastructure\Persistence\Models\Partner;
 use App\Infrastructure\Persistence\Models\Product;
@@ -106,4 +109,28 @@ it('outstandingBalanceForPartner menjumlahkan sisa hutang lintas faktur pemasok 
 
     expect($outstanding)->toEqual('170000.00')
         ->and($secondInvoice->balanceDue())->toEqual('100000.00');
+});
+
+it('T5.4 — pembayaran tunai menerbitkan CashEntry kas keluar yang merujuk PurchaseInvoice', function () {
+    $invoice = makeFinalizedInvoice($this->branch, $this->supplier, $this->product, '10.0000', '10000.00');
+
+    $this->action->execute($invoice, ['method' => 'cash', 'amount' => '40000.00']);
+
+    $entry = CashEntry::query()
+        ->where('reference_type', $invoice->getMorphClass())
+        ->where('reference_id', $invoice->id)
+        ->sole();
+
+    expect($entry->entry_type)->toBe(CashEntryType::PurchasePayment)
+        ->and((string) $entry->amount)->toEqual('-40000.00')
+        ->and(app(CashLedgerService::class)->balance($this->branch))->toEqual('-40000.00');
+});
+
+it('T5.4 — pembayaran non-tunai TIDAK menerbitkan CashEntry', function () {
+    $invoice = makeFinalizedInvoice($this->branch, $this->supplier, $this->product, '10.0000', '10000.00');
+
+    $this->action->execute($invoice, ['method' => 'transfer', 'amount' => '40000.00']);
+
+    expect(CashEntry::query()->where('reference_type', $invoice->getMorphClass())->where('reference_id', $invoice->id)->exists())
+        ->toBeFalse();
 });

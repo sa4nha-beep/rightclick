@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Actions;
 
+use App\Application\Services\CashLedgerService;
 use App\Application\Services\DocumentStateService;
 use App\Application\Services\StockLedgerService;
 use App\Infrastructure\Persistence\Models\Sale;
@@ -14,6 +15,12 @@ use Illuminate\Support\Facades\DB;
  * `VoidStockAdjustmentAction` — mengembalikan barang ke stok lewat mutasi
  * berlawanan (bukan menghapus mutasi lama, DB Design §8.3), lalu
  * memfinalisasi status void.
+ *
+ * `CashLedgerService::reverseForReference()` (T5.4 retrofit) — bila
+ * penjualan ini punya `CashEntry` kas masuk (pembayaran tunai), void
+ * menerbitkan entri kas KELUAR berlawanan yang merujuk balik ke `$sale`
+ * ini — tanpa ini, kas yang sudah dibalikkan lewat void tetap tercatat
+ * sebagai masuk selamanya di ledger kas.
  *
  * TIDAK menyesuaikan ulang `cashier_shifts.closing_cash_expected`/
  * `variance` bila shift terkait sudah ditutup sebelum void ini terjadi —
@@ -26,12 +33,14 @@ final class VoidSaleAction
     public function __construct(
         private readonly DocumentStateService $documentStates,
         private readonly StockLedgerService $stockLedger,
+        private readonly CashLedgerService $cashLedger,
     ) {}
 
     public function execute(Sale $sale, string $reason): Sale
     {
         return DB::transaction(function () use ($sale, $reason) {
             $this->stockLedger->reverseForReference($sale, $sale);
+            $this->cashLedger->reverseForReference($sale, $sale);
             $this->documentStates->void($sale, $reason);
 
             return $sale->fresh();
