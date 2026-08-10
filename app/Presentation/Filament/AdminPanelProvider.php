@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Presentation\Filament;
 
+use App\Http\Middleware\SetActiveBranchContext;
 use App\Presentation\Filament\Auth\Login;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -137,6 +138,10 @@ class AdminPanelProvider extends PanelProvider
                 // SELALU dipanggil tepat sebelum keputusan izin, sehingga
                 // itulah titik yang dipakai untuk logout + invalidate sesi.
                 Authenticate::class,
+                // T2.8 — BranchContext harus terisi sebelum Resource/Livewire
+                // component apa pun membaca cabang aktif; wajib setelah
+                // Authenticate::class (butuh Auth::user() sudah tersedia).
+                SetActiveBranchContext::class,
             ]);
     }
 }

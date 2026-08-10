@@ -79,5 +79,23 @@ class DatabaseSeeder extends Seeder
 
         // T1.9 — nilai ambang TH1–TH5c
         $this->call(SettingSeeder::class);
+
+        // T2.2 — contoh pemasok dan pelanggan
+        $this->call(PartnerSeeder::class);
+
+        // T2.3 — kategori produk dasar
+        $this->call(ProductCategorySeeder::class);
+
+        // T2.4 — satuan pengukuran dasar
+        $this->call(UnitSeeder::class);
+
+        // T2.5 — contoh produk lintas kategori
+        $this->call(ProductSeeder::class);
+
+        // T2.6 — contoh karyawan
+        $this->call(EmployeeSeeder::class);
+
+        // T2.7 — contoh jasa
+        $this->call(ServiceSeeder::class);
     }
 }
