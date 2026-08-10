@@ -120,7 +120,7 @@ final class FinalizeStockOpnameAction
 
             $this->documentStates->finalize($opname);
 
-            $this->outbox->record($opname->branch, $opname, 'stock_opname.finalized');
+            $this->outbox->record($opname->branch, $opname, 'stock_opname.finalized', ['lines']);
 
             return $opname->fresh(['lines']);
         });

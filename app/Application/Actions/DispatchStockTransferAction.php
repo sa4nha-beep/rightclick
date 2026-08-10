@@ -74,7 +74,7 @@ final class DispatchStockTransferAction
 
             $this->documentStates->finalize($transfer);
 
-            $this->outbox->record($transfer->branch, $transfer, 'stock_transfer.finalized');
+            $this->outbox->record($transfer->branch, $transfer, 'stock_transfer.finalized', ['lines']);
 
             return $transfer->fresh(['lines.lineBatches']);
         });

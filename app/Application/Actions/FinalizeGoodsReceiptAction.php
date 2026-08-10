@@ -70,7 +70,7 @@ final class FinalizeGoodsReceiptAction
 
             $this->documentStates->finalize($goodsReceipt);
 
-            $this->outbox->record($goodsReceipt->branch, $goodsReceipt, 'goods_receipt.finalized');
+            $this->outbox->record($goodsReceipt->branch, $goodsReceipt, 'goods_receipt.finalized', ['lines']);
 
             return $goodsReceipt->fresh(['lines']);
         });

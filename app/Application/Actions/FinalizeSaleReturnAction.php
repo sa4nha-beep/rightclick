@@ -87,7 +87,7 @@ final class FinalizeSaleReturnAction
 
             $this->documentStates->finalize($saleReturn);
 
-            $this->outbox->record($saleReturn->branch, $saleReturn, 'sale_return.finalized');
+            $this->outbox->record($saleReturn->branch, $saleReturn, 'sale_return.finalized', ['lines']);
 
             return $saleReturn->fresh(['lines']);
         });

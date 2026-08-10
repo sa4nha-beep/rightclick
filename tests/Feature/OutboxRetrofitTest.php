@@ -97,10 +97,26 @@ it('sale.finalized dan sale.voided tercatat di outbox', function () {
     $sale->payments()->create(['method' => 'cash', 'amount' => '15000.00']);
 
     $finalized = app(FinalizeSaleAction::class)->execute($sale);
-    expect(outboxEventFor($finalized->getMorphClass(), $finalized->id)->event_type)->toBe('sale.finalized');
+    $finalizedEvent = outboxEventFor($finalized->getMorphClass(), $finalized->id);
+    expect($finalizedEvent->event_type)->toBe('sale.finalized');
+
+    // T5.8 — payload harus membawa snapshot relasional lengkap (bukan
+    // cuma kolom Sale), supaya HQ punya cukup data merekonstruksi
+    // SELURUH tabel SYNCED anak tanpa round-trip tambahan.
+    expect($finalizedEvent->payload['items'])->toHaveCount(1)
+        ->and($finalizedEvent->payload['payments'])->toHaveCount(1)
+        ->and($finalizedEvent->payload['stock_mutations'])->toHaveCount(1)
+        ->and($finalizedEvent->payload['stock_mutations'][0]['quantity'])->toEqual('-1.0000')
+        ->and($finalizedEvent->payload['cash_entries'])->toHaveCount(1)
+        ->and($finalizedEvent->payload['cash_entries'][0]['entry_type'])->toBe('sale_payment');
 
     app(VoidSaleAction::class)->execute($finalized, 'Uji outbox');
-    expect(outboxEventFor($finalized->getMorphClass(), $finalized->id)->event_type)->toBe('sale.voided');
+    $voidedEvent = outboxEventFor($finalized->getMorphClass(), $finalized->id);
+    expect($voidedEvent->event_type)->toBe('sale.voided')
+        // Void tidak punya baris items/payments baru — hanya mutasi/kas
+        // pembalik (VoidReversal), keduanya tetap merujuk $sale yang sama.
+        ->and($voidedEvent->payload['stock_mutations'])->toHaveCount(2)
+        ->and($voidedEvent->payload['cash_entries'])->toHaveCount(2);
 });
 
 it('sale_return.finalized dan sale_return.voided tercatat di outbox', function () {
@@ -216,7 +232,12 @@ it('goods_receipt.finalized/.voided dan purchase_invoice.finalized/.voided serta
     $gr->lines()->create(['product_id' => $this->product->id, 'quantity' => '5.0000', 'unit_cost' => '10000.00']);
 
     $finalizedGr = app(FinalizeGoodsReceiptAction::class)->execute($gr);
-    expect(outboxEventFor($finalizedGr->getMorphClass(), $finalizedGr->id)->event_type)->toBe('goods_receipt.finalized');
+    $grEvent = outboxEventFor($finalizedGr->getMorphClass(), $finalizedGr->id);
+    expect($grEvent->event_type)->toBe('goods_receipt.finalized')
+        ->and($grEvent->payload['lines'])->toHaveCount(1)
+        ->and($grEvent->payload['stock_mutations'])->toHaveCount(1)
+        ->and($grEvent->payload['stock_batches'])->toHaveCount(1)
+        ->and($grEvent->payload['stock_batches'][0]['unit_cost'])->toEqual('10000.00');
 
     $invoice = PurchaseInvoice::factory()->create([
         'branch_id' => $this->branch->id,
@@ -227,7 +248,13 @@ it('goods_receipt.finalized/.voided dan purchase_invoice.finalized/.voided serta
     expect(outboxEventFor($finalizedInvoice->getMorphClass(), $finalizedInvoice->id)->event_type)->toBe('purchase_invoice.finalized');
 
     $payment = app(RecordPurchasePaymentAction::class)->execute($finalizedInvoice, ['method' => 'cash', 'amount' => '20000.00']);
-    expect(outboxEventFor($payment->getMorphClass(), $payment->id)->event_type)->toBe('purchase_payment.recorded');
+    $paymentEvent = outboxEventFor($payment->getMorphClass(), $payment->id);
+    expect($paymentEvent->event_type)->toBe('purchase_payment.recorded')
+        // CashEntry merujuk PurchaseInvoice, bukan PurchasePayment (aggregate
+        // event ini) — auto-attach OutboxService tidak menemukannya sendiri,
+        // dilampirkan manual lewat $extra (lihat RecordPurchasePaymentAction).
+        ->and($paymentEvent->payload['cash_entries'])->toHaveCount(1)
+        ->and($paymentEvent->payload['cash_entries'][0]['amount'])->toEqual('-20000.00');
 
     // Faktur belum bisa dibatalkan karena sudah menerima pembayaran (T5.3) —
     // uji void faktur dengan dokumen TERPISAH yang belum dibayar.

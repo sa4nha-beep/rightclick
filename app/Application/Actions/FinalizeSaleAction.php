@@ -173,7 +173,7 @@ final class FinalizeSaleAction
 
         $this->documentStates->finalize($sale);
 
-        $this->outbox->record($sale->branch, $sale, 'sale.finalized');
+        $this->outbox->record($sale->branch, $sale, 'sale.finalized', ['items', 'payments']);
 
         return $sale->fresh(['items', 'payments']);
     }

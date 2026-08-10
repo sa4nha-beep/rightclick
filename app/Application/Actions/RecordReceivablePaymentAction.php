@@ -37,6 +37,10 @@ use Illuminate\Support\Facades\DB;
  * induk (sudah punya event sendiri, `sale.finalized`, di transaksi
  * TERPISAH saat sale itu sendiri difinalisasi) — sama alasan
  * `RecordPurchasePaymentAction`.
+ *
+ * Payload (T5.8): `CashEntry` yang tercipta (bila tunai) merujuk `Sale`,
+ * BUKAN `ReceivablePayment` — dilampirkan manual lewat `$extra`, sama
+ * alasan `RecordPurchasePaymentAction`.
  */
 final class RecordReceivablePaymentAction
 {
@@ -86,17 +90,21 @@ final class RecordReceivablePaymentAction
                 'reference_no' => $payment['reference_no'] ?? null,
             ]);
 
+            $extra = [];
+
             if ($method === PaymentMethod::Cash) {
-                $this->cashLedger->record(
+                $cashEntry = $this->cashLedger->record(
                     $locked->branch,
                     $amount,
                     CashEntryType::ReceivableCollection,
                     now(),
                     $locked,
                 );
+
+                $extra['cash_entries'] = [$cashEntry->attributesToArray()];
             }
 
-            $this->outbox->record($locked->branch, $receivablePayment, 'receivable_payment.recorded');
+            $this->outbox->record($locked->branch, $receivablePayment, 'receivable_payment.recorded', extra: $extra);
 
             return $receivablePayment;
         });

@@ -22,17 +22,17 @@ return new class extends Migration
      * yang tahu (§11 catatan simpul kritis).
      *
      * `aggregate_type`/`aggregate_id` menunjuk DOKUMEN INDUK (mis. `Sale`),
-     * BUKAN baris anak (`sale_items`/`sale_payments`/`stock_mutations`/
-     * `cash_entries`) — satu event per TRANSISI SIKLUS HIDUP dokumen
+     * BUKAN baris anak — satu event per TRANSISI SIKLUS HIDUP dokumen
      * (finalize/void), sama filosofi "aggregate root" yang sudah tersirat
      * dari contoh CLAUDE.md §8 ("`sale.finalized` merujuk `batch_id` dari
-     * `goods_receipt.finalized`") — baris anak dianggap "terbawa" oleh
-     * event dokumen induknya, bukan menerbitkan event sendiri. Payload
-     * (`attributesToArray()` dokumen, T5.7) SENGAJA sederhana — skema
-     * payload lengkap yang menjamin sisi penerima (HQ) punya cukup data
-     * tanpa round-trip tambahan adalah pekerjaan desain protokol T5.8, di
-     * luar cakupan T5.7 yang murni membuktikan mekanisme penulisan
-     * transaksional.
+     * `goods_receipt.finalized`"). Payload (T5.8, `OutboxService::record()`)
+     * TETAP membawa snapshot relasional LENGKAP baris anak (`sale_items`/
+     * `sale_payments`/`stock_mutations`/`stock_batches`/`cash_entries`) —
+     * "aggregate root" di sini soal identitas EVENT (satu per transisi
+     * dokumen induk), bukan soal payload-nya cuma kolom dokumen induk saja
+     * (desain awal T5.7 yang diperkaya di T5.8 setelah disadari HQ tidak
+     * punya cara lain merekonstruksi tabel SYNCED anak tanpa round-trip
+     * tambahan).
      *
      * `status` DI SINI hanya `pending`/`sent`/`failed` — penyederhanaan
      * lokal, BUKAN 4 status protokol penuh (`accepted`/`duplicate`/

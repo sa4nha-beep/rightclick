@@ -85,7 +85,7 @@ final class FinalizePurchaseOrderAction
 
         $this->documentStates->finalize($purchaseOrder);
 
-        $this->outbox->record($purchaseOrder->branch, $purchaseOrder, 'purchase_order.finalized');
+        $this->outbox->record($purchaseOrder->branch, $purchaseOrder, 'purchase_order.finalized', ['lines']);
 
         return $purchaseOrder->fresh(['lines']);
     }

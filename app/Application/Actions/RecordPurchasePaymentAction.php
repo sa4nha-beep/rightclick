@@ -44,6 +44,12 @@ use Illuminate\Support\Facades\DB;
  * transaksi TERPISAH saat faktur ITU sendiri difinalisasi — pembayaran ini
  * terjadi BELAKANGAN, di transaksi lain, jadi butuh event sendiri agar
  * tidak pernah hilang tanpa jejak ke HQ.
+ *
+ * Payload (T5.8): `CashEntry` yang tercipta (bila tunai) merujuk
+ * `PurchaseInvoice`, BUKAN `PurchasePayment` (lihat catatan
+ * `CashLedgerService` di atas) — auto-attach `OutboxService` (yang mencari
+ * berdasar aggregate event, `$purchasePayment`) TIDAK akan menemukannya,
+ * jadi dilampirkan manual lewat parameter `$extra`.
  */
 final class RecordPurchasePaymentAction
 {
@@ -95,17 +101,21 @@ final class RecordPurchasePaymentAction
                 'reference_no' => $payment['reference_no'] ?? null,
             ]);
 
+            $extra = [];
+
             if ($method === PaymentMethod::Cash) {
-                $this->cashLedger->record(
+                $cashEntry = $this->cashLedger->record(
                     $invoice->branch,
                     bcmul($amount, '-1', 2),
                     CashEntryType::PurchasePayment,
                     now(),
                     $invoice,
                 );
+
+                $extra['cash_entries'] = [$cashEntry->attributesToArray()];
             }
 
-            $this->outbox->record($invoice->branch, $purchasePayment, 'purchase_payment.recorded');
+            $this->outbox->record($invoice->branch, $purchasePayment, 'purchase_payment.recorded', extra: $extra);
 
             return $purchasePayment;
         });

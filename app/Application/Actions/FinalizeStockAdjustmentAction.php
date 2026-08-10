@@ -117,7 +117,7 @@ final class FinalizeStockAdjustmentAction
 
         $this->documentStates->finalize($adjustment);
 
-        $this->outbox->record($adjustment->branch, $adjustment, 'stock_adjustment.finalized');
+        $this->outbox->record($adjustment->branch, $adjustment, 'stock_adjustment.finalized', ['lines']);
 
         return $adjustment->fresh(['lines']);
     }

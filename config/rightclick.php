@@ -42,4 +42,29 @@ return [
 
     'display_timezone' => env('RIGHTCLICK_DISPLAY_TIMEZONE', 'Asia/Jakarta'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Sinkronisasi (T5.8)
+    |--------------------------------------------------------------------------
+    |
+    | Hanya relevan di node CABANG — `OutboxDispatcher` memakai nilai ini
+    | untuk memanggil `/api/v1/sync/events` milik HQ lewat VPN (CLAUDE.md
+    | §8/§14). Node HQ tidak memanggil dirinya sendiri, jadi nilai ini boleh
+    | kosong di `.env` node HQ.
+    |
+    */
+
+    'sync' => [
+
+        // URL dasar node HQ, dijangkau lewat VPN WireGuard (§14) — mis.
+        // https://hq.rightclick.internal:8443. TANPA trailing slash.
+        'hq_url' => env('RIGHTCLICK_SYNC_HQ_URL'),
+
+        // Token PLAINTEXT node ini — diterbitkan HQ lewat
+        // `php artisan sync:issue-token {kode_cabang}`, disalin ke .env
+        // cabang. HQ hanya menyimpan hash-nya (`branches.sync_token_hash`).
+        'token' => env('RIGHTCLICK_SYNC_TOKEN'),
+
+    ],
+
 ];
