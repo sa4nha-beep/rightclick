@@ -149,6 +149,26 @@ jobs:
       - name: Install dependencies
         run: composer install --no-progress --prefer-dist
 
+      # Ketiga bug sebelumnya (DB_HOST, Redis, rightclick_testing belum
+      # dimigrasikan) menutupi yang ini: `public/build/` sengaja
+      # digitignore (artefak build, bukan sumber) — tanpa build asli di
+      # sini, SETIAP halaman Filament (memakai @vite) melempar
+      # ViteManifestNotFoundException saat dirender, menggagalkan seluruh
+      # test "halaman ... dapat diakses" sekaligus (bukan gagal satu-satu
+      # test, tapi seluruh kelas test HTTP page-level bersamaan — pola
+      # yang membedakannya dari kegagalan test asersi biasa).
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
       - name: Copy .env
         run: cp .env.example .env
 
