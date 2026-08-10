@@ -204,7 +204,17 @@ jobs:
           fi
 
       - name: Run tests
-        run: php artisan test
+        run: |
+          set +e
+          OUTPUT=$(php artisan test 2>&1)
+          CODE=$?
+          set -e
+          echo "$OUTPUT"
+          if [ $CODE -ne 0 ]; then
+            FAILURES=$(echo "$OUTPUT" | grep -E '⨯|FAILED' | tr '\n' ' ' | cut -c1-900)
+            echo "::error::php artisan test failed (exit $CODE): ${FAILURES}"
+            exit $CODE
+          fi
 
   # DoD5 — composer audit
   audit:
