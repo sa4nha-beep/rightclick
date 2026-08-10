@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -102,3 +103,83 @@ it('setiap model Eloquent RIGHTCLICK memiliki Policy (P4)', function () {
         );
     }
 });
+
+/**
+ * T2.10 — daftar REPLICATED persis salinan CLAUDE.md §7 (dikurangi
+ * `roles`/`permissions`, dikecualikan test Policy generik di atas karena
+ * dikelola paket spatie/laravel-permission sendiri). Bila dokumen berubah,
+ * daftar ini WAJIB ikut diperbarui — dokumen yang berlaku (§17), test ini
+ * hanya menjaga kode tidak diam-diam menyimpang dari dokumen saat ini.
+ *
+ * Setiap Policy tabel REPLICATED wajib memakai `GuardsMasterDataWrites`
+ * (M02) — tanpanya, node cabang bisa menulis master data yang seharusnya
+ * hanya boleh ditulis HQ, lolos tanpa terdeteksi karena tidak ada RLS
+ * (CLAUDE.md §4) yang mengompensasi di lapisan database.
+ */
+it('setiap Policy tabel REPLICATED memakai trait GuardsMasterDataWrites (M02)', function (string $modelName) {
+    $policyClass = "App\\Infrastructure\\Persistence\\Policies\\{$modelName}Policy";
+
+    expect(class_exists($policyClass))->toBeTrue("{$policyClass} tidak ditemukan.");
+
+    $traits = class_uses($policyClass);
+
+    expect(array_key_exists('App\\Infrastructure\\Persistence\\Concerns\\GuardsMasterDataWrites', $traits))->toBeTrue(
+        "{$policyClass} mengelola tabel REPLICATED tapi tidak memakai GuardsMasterDataWrites — node cabang bisa menulis master data (M02).",
+    );
+})->with([
+    'Branch',
+    'User',
+    'UserBranch',
+    'Partner',
+    'Product',
+    'ProductCategory',
+    'Unit',
+    'Service',
+    'Employee',
+    'Setting',
+]);
+
+/**
+ * T2.10 — setiap entitas Master Data Fase 2 wajib punya Filament Resource
+ * terdaftar (bukan hanya Model+Policy tanpa antarmuka) DAN Resource itu
+ * menunjuk model yang benar. Auto-discovery Filament (`discoverResources`
+ * di `AdminPanelProvider`) tidak punya konvensi penamaan kaku seperti
+ * guesser Policy Laravel, sehingga daftar di sini ditulis eksplisit,
+ * bukan diturunkan dari nama model.
+ */
+it('setiap entitas Master Data Fase 2 memiliki Filament Resource yang menunjuk model yang benar', function (string $resourceClass, string $modelClass) {
+    expect(class_exists($resourceClass))->toBeTrue("{$resourceClass} tidak ditemukan.");
+    expect(is_subclass_of($resourceClass, Filament\Resources\Resource::class))->toBeTrue(
+        "{$resourceClass} bukan turunan Filament\\Resources\\Resource.",
+    );
+    expect($resourceClass::getModel())->toBe($modelClass);
+})->with([
+    ['App\Presentation\Filament\Resources\Branches\BranchResource', 'App\Infrastructure\Persistence\Models\Branch'],
+    ['App\Presentation\Filament\Resources\Partners\PartnerResource', 'App\Infrastructure\Persistence\Models\Partner'],
+    ['App\Presentation\Filament\Resources\ProductCategories\ProductCategoryResource', 'App\Infrastructure\Persistence\Models\ProductCategory'],
+    ['App\Presentation\Filament\Resources\Units\UnitResource', 'App\Infrastructure\Persistence\Models\Unit'],
+    ['App\Presentation\Filament\Resources\Products\ProductResource', 'App\Infrastructure\Persistence\Models\Product'],
+    ['App\Presentation\Filament\Resources\Employees\EmployeeResource', 'App\Infrastructure\Persistence\Models\Employee'],
+    ['App\Presentation\Filament\Resources\Services\ServiceResource', 'App\Infrastructure\Persistence\Models\Service'],
+]);
+
+/**
+ * T3.8 — sama pola dengan T2.10 di atas, diperluas untuk entitas Inventory
+ * Core Fase 3 (batch, ledger mutasi, opname, adjustment, transfer,
+ * penerimaan transfer).
+ */
+it('setiap entitas Inventory Core Fase 3 memiliki Filament Resource yang menunjuk model yang benar', function (string $resourceClass, string $modelClass) {
+    expect(class_exists($resourceClass))->toBeTrue("{$resourceClass} tidak ditemukan.");
+    expect(is_subclass_of($resourceClass, Filament\Resources\Resource::class))->toBeTrue(
+        "{$resourceClass} bukan turunan Filament\\Resources\\Resource.",
+    );
+    expect($resourceClass::getModel())->toBe($modelClass);
+})->with([
+    ['App\Presentation\Filament\Resources\StockBalances\StockBalanceResource', 'App\Infrastructure\Persistence\Models\StockBalance'],
+    ['App\Presentation\Filament\Resources\StockBatches\StockBatchResource', 'App\Infrastructure\Persistence\Models\StockBatch'],
+    ['App\Presentation\Filament\Resources\StockMutations\StockMutationResource', 'App\Infrastructure\Persistence\Models\StockMutation'],
+    ['App\Presentation\Filament\Resources\StockOpnames\StockOpnameResource', 'App\Infrastructure\Persistence\Models\StockOpname'],
+    ['App\Presentation\Filament\Resources\StockAdjustments\StockAdjustmentResource', 'App\Infrastructure\Persistence\Models\StockAdjustment'],
+    ['App\Presentation\Filament\Resources\StockTransfers\StockTransferResource', 'App\Infrastructure\Persistence\Models\StockTransfer'],
+    ['App\Presentation\Filament\Resources\StockTransferReceipts\StockTransferReceiptResource', 'App\Infrastructure\Persistence\Models\StockTransferReceipt'],
+]);

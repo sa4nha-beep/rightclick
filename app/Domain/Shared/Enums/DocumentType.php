@@ -16,19 +16,23 @@ namespace App\Domain\Shared\Enums;
  * Enum ini berada di lapisan Domain — tidak boleh mengimpor apa pun dari
  * Laravel, Filament, maupun Livewire (LayeringTest).
  *
- * Sengaja baru memuat satu case. Hanya `sale` → `SAL` yang formatnya
- * terdokumentasi di seluruh dokumen (satu-satunya contoh nomor yang muncul).
- * Kode prefix untuk `po`, `gr`, `opname`, transfer, adjustment, dan retur
- * belum ditetapkan dokumen mana pun; menebaknya berarti membakukan kode yang
- * akan tercetak pada dokumen resmi tanpa dasar (G4 — bila dokumentasi tidak
- * lengkap, hentikan dan tanyakan). Setiap case ditambahkan oleh task yang
- * membangun dokumen bersangkutan (T4.6 penjualan sudah tercakup di sini; T5.1
- * PO, T5.2 penerimaan, T3.5 opname, T3.6 adjustment, T3.7 transfer, T4.10
- * retur) dengan kode yang telah dikonfirmasi.
+ * Awalnya hanya memuat `sale` → `SAL`, satu-satunya contoh nomor yang
+ * terdokumentasi. T3.4-T3.6 menambah `Opname`/`Adjustment`/
+ * `TransferDispatch`/`TransferReceipt` dengan kode yang DITURUNKAN SENDIRI (self-derived)
+ * (OPN/ADJ/TRO/TRI) — sama seperti penomoran task T2.x/T3.x sendiri harus
+ * diselederivasi karena `HS-TASKS-RIGHTCLICK-v1.1`/`HS-DB-RIGHTCLICK-v1.0`
+ * tidak ada di repositori (lihat CLAUDE.md §11 catatan Fase 2/3). Ditandai
+ * eksplisit untuk direkonsiliasi terhadap dokumen asli bila tersedia —
+ * BUKAN diam-diam dianggap final. Kode prefix untuk `po`/`gr`/retur (T5.x)
+ * masih belum ditetapkan.
  */
 enum DocumentType: string
 {
     case Sale = 'sale';
+    case Opname = 'opname';
+    case Adjustment = 'adjustment';
+    case TransferDispatch = 'transfer_dispatch';
+    case TransferReceipt = 'transfer_receipt';
 
     /**
      * Kode tiga huruf pada nomor dokumen tercetak.
@@ -37,6 +41,10 @@ enum DocumentType: string
     {
         return match ($this) {
             self::Sale => 'SAL',
+            self::Opname => 'OPN',
+            self::Adjustment => 'ADJ',
+            self::TransferDispatch => 'TRO',
+            self::TransferReceipt => 'TRI',
         };
     }
 
@@ -44,6 +52,10 @@ enum DocumentType: string
     {
         return match ($this) {
             self::Sale => 'Penjualan',
+            self::Opname => 'Stock Opname',
+            self::Adjustment => 'Penyesuaian Stok',
+            self::TransferDispatch => 'Transfer Keluar',
+            self::TransferReceipt => 'Transfer Masuk',
         };
     }
 }

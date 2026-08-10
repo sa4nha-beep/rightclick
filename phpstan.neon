@@ -16,14 +16,12 @@ parameters:
         - app/**/.gitkeep
 
     ignoreErrors:
-        -
-            # T1.3 — trait fondasi (HasUuidV7, TracksUserActions, BelongsToBranch)
-            # baru dipakai model nyata mulai T1.4 (branches, users). PHPStan
-            # menganggap trait tanpa pemakai di app/ sebagai tidak terpakai;
-            # pemakaiannya saat ini hanya di kelas anonim tests/, yang berada
-            # di luar `paths` analisis.
-            identifier: trait.unused
-            path: app/Infrastructure/Persistence/Concerns/*.php
+        # T1.3 sempat mengabaikan `trait.unused` untuk seluruh
+        # `Concerns/*.php` — dihapus di T3.4: `HasDocumentState` (trait
+        # fondasi terakhir yang belum dipakai model nyata) mulai dikonsumsi
+        # `StockOpname`, jadi seluruh trait di direktori ini sekarang benar-
+        # benar terpakai dan aturan abaikan itu sudah basi (PHPStan menandai
+        # ignoreErrors yang tidak lagi cocok sebagai error tersendiri).
         -
             # Larastan generic type inference for Eloquent relationships.
             # False positive — method bodies match return type declarations.

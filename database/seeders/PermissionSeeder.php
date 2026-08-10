@@ -10,13 +10,25 @@ class PermissionSeeder extends Seeder
 {
     /**
      * Seeder phase 2 (T1.5): Five roles and 58 permissions.
+     * T3.3 menambah permission ke-59: `view_stock_cost`.
      *
      * CLAUDE.md §10 — Otorisasi
      * Role hierarchy: owner > admin > {kasir, gudang} > viewer
      *
-     * Permission domains (58 total):
+     * Permission domains (59 total setelah T3.3):
      *   Branches (5), Users (7), Partners (6), Products (8),
-     *   Inventory (14), Sales (10), Procurement (6), Financials (6)
+     *   Inventory (15), Sales (10), Procurement (6), Financials (6)
+     *
+     * `view_stock_cost` (T3.3) — HS-PERM-RIGHTCLICK-v1.2 tidak mendaftar
+     * permission ini; ditambahkan karena §2 CLAUDE.md eksplisit menyatakan
+     * Gudang "tidak melihat nilai" sementara 14 permission Inventory asli
+     * (`view_batches`/`view_stock_mutations`) TIDAK membedakan kuantitas
+     * dari `unit_cost` — keduanya tabel yang sama berisi kolom biaya. Tanpa
+     * permission terpisah, P6 ("kolom sensitif disaring di lapisan query")
+     * tidak bisa ditegakkan untuk Gudang. Owner/Admin/Viewer diberi
+     * permission ini; Kasir/Gudang tidak — lihat `StockBatchesTable`/
+     * `StockMutationsTable` (T3.3) untuk bagaimana ini menyaring kolom
+     * `unit_cost` di lapisan query, bukan hanya menyembunyikannya di tabel.
      */
     public function run(): void
     {
@@ -55,10 +67,11 @@ class PermissionSeeder extends Seeder
             'manage_product_variants',
             'manage_product_discontinue',
 
-            // Inventory (14)
+            // Inventory (14 dari T1.5, + view_stock_cost T3.3 — lihat catatan di bawah)
             'view_stock',
             'view_batches',
             'view_stock_mutations',
+            'view_stock_cost',
             'perform_opname',
             'perform_adjustment',
             'perform_transfer',
@@ -184,6 +197,7 @@ class PermissionSeeder extends Seeder
             'view_stock',
             'view_batches',
             'view_stock_mutations',
+            'view_stock_cost',
             'view_sales',
             'view_sale_returns',
             'view_cashier_shift',
