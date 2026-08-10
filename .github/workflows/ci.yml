@@ -135,7 +135,6 @@ jobs:
             ${{ runner.os }}-php-
 
       - name: Install dependencies
-        if: steps.composer-cache.outputs.cache-hit != 'true'
         run: composer install --no-progress --prefer-dist
 
       - name: Copy .env
@@ -144,9 +143,14 @@ jobs:
       - name: Generate app key
         run: php artisan key:generate
 
-      - name: Show resolved DB config (diagnostic)
+      - name: Diagnose DB connectivity
         run: |
-          php artisan tinker --execute="echo 'DB_HOST resolved to ' . config('database.connections.pgsql.host') . PHP_EOL;"
+          RESOLVED_HOST=$(php artisan tinker --execute="echo config('database.connections.pgsql.host');")
+          RESOLVED_PORT=$(php artisan tinker --execute="echo config('database.connections.pgsql.port');")
+          echo "::notice::Resolved pgsql host=${RESOLVED_HOST} port=${RESOLVED_PORT}"
+          OUTPUT=$(php artisan db:show 2>&1) && STATUS=ok || STATUS=fail
+          FLAT=$(echo "$OUTPUT" | tr '\n' ' ' | cut -c1-500)
+          echo "::notice::db:show ${STATUS}: ${FLAT}"
 
       - name: Run migrations
         run: php artisan migrate --force -v
