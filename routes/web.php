@@ -5,9 +5,12 @@ use App\Presentation\Pos\Http\Controllers\ShowSaleReceiptController;
 use App\Presentation\Pos\Livewire\PosTerminal;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// RIGHTCLICK adalah alat internal tanpa halaman publik (§1) — dua pintu
+// masuk nyata adalah back office (/admin) dan POS (/pos). View `welcome`
+// bawaan Laravel (font CDN, dark mode, branding Laravel/Laracasts) sengaja
+// dihapus (T1.1 leftover yang tidak pernah dibersihkan) — melanggar R13/UT15
+// (font lokal) dan "dark mode dinonaktifkan" (§9) begitu ada yang membukanya.
+Route::get('/', fn () => redirect('/admin'));
 
 /*
  * POS (T4.4) — di luar panel Filament (`App\Presentation\Pos`,
