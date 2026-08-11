@@ -26,6 +26,16 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * `Auditable` (T1.6): permintaan, persetujuan, dan penolakan approval adalah
  * "aksi sensitif" per R11 — dicatat otomatis, bukan lewat panggilan manual
  * tersebar di `ApprovalService`.
+ *
+ * `payload` (jsonb, nullable, ditambahkan penutupan PT16) — menyimpan nilai
+ * yang DIAJUKAN untuk `approvable` yang TIDAK punya konsep draft sendiri
+ * (mis. `Product.selling_price`, TH5a/TH5b/TH5c). Kosong/null untuk seluruh
+ * modul lain (Sale/StockAdjustment/PurchaseOrder/dst.) yang nilai barunya
+ * sudah tersimpan di baris draft dokumen itu sendiri — lihat migration
+ * `2026_08_11_000011_add_payload_to_approvals_table.php` untuk rasional
+ * lengkap.
+ *
+ * @property array<string, mixed>|null $payload
  */
 class Approval extends Model
 {
@@ -41,6 +51,7 @@ class Approval extends Model
         'approver_id',
         'status',
         'reason',
+        'payload',
         'requested_at',
         'decided_at',
     ];
@@ -49,6 +60,7 @@ class Approval extends Model
     {
         return [
             'status' => ApprovalStatus::class,
+            'payload' => 'array',
             'requested_at' => 'datetime',
             'decided_at' => 'datetime',
         ];

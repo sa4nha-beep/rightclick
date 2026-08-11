@@ -36,8 +36,16 @@ final class ApprovalService
      * untuk auto-fill `branch_id` saat `creating`) baru dibangun T2.5 —
      * tanpa ini, `Approval::create()` gagal kolom NOT NULL `branch_id`.
      * Default ke cabang aktif pengguna login bila tidak diberikan eksplisit.
+     *
+     * `$payload` (penutupan PT16) — HANYA dipakai `$approvable` yang tidak
+     * punya konsep draft sendiri (mis. `Product`, TH5a/TH5b/TH5c). Kosong
+     * (`[]`, disimpan sebagai `null`) untuk seluruh pemanggil lain — nilai
+     * baru mereka SUDAH ada di baris draft dokumennya sendiri, tidak perlu
+     * disalin ke sini.
+     *
+     * @param  array<string, mixed>  $payload
      */
-    public function request(Model $approvable, ?string $requestedBy = null, ?string $branchId = null): Approval
+    public function request(Model $approvable, ?string $requestedBy = null, ?string $branchId = null, array $payload = []): Approval
     {
         return Approval::create([
             'branch_id' => $branchId ?? Auth::user()?->default_branch_id,
@@ -45,6 +53,7 @@ final class ApprovalService
             'approvable_id' => $approvable->getKey(),
             'requested_by' => $requestedBy ?? Auth::id(),
             'status' => ApprovalStatus::Pending,
+            'payload' => $payload === [] ? null : $payload,
             'requested_at' => now(),
         ]);
     }

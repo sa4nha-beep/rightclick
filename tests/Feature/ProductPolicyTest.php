@@ -115,6 +115,18 @@ it('produk merujuk kategori dan satuan lewat relasi', function () {
         ->and($product->baseUnit->id)->toBe($unit->id);
 });
 
+it('approve (TH5a/TH5b/TH5c) memerlukan permission manage_product_prices dan node HQ', function () {
+    $policy = new ProductPolicy;
+    $product = makeTestProduct();
+    $authorized = makeTestUser(['manage_product_prices']);
+
+    expect($policy->approve($authorized, $product))->toBeTrue()
+        ->and($policy->approve(makeTestUser(['edit_products']), $product))->toBeFalse();
+
+    config(['rightclick.node.role' => NodeRole::Branch->value]);
+    expect($policy->approve($authorized, $product))->toBeFalse();
+});
+
 it('model Product tidak memiliki kolom harga beli — §16 peringatan #5', function () {
     $product = makeTestProduct();
 

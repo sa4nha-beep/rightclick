@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Application\Actions\ChangeProductSellingPriceAction;
 use App\Application\Actions\FinalizeSaleAction;
 use App\Domain\Shared\Enums\ApprovalStatus;
 use App\Domain\Shared\Enums\AuditAction;
@@ -15,10 +16,12 @@ use App\Infrastructure\Persistence\Models\Product;
 use App\Infrastructure\Persistence\Models\Sale;
 use App\Infrastructure\Persistence\Models\Service;
 use App\Infrastructure\Persistence\Models\Setting;
+use App\Infrastructure\Persistence\Models\StockBatch;
 use App\Infrastructure\Persistence\Models\User;
 use App\Infrastructure\Persistence\Policies\ApprovalPolicy;
 use App\Infrastructure\Persistence\Policies\AuditLogPolicy;
 use App\Infrastructure\Persistence\Policies\BranchPolicy;
+use App\Infrastructure\Persistence\Policies\PurchaseOrderPolicy;
 use App\Infrastructure\Persistence\Policies\SalePolicy;
 use App\Infrastructure\Persistence\Policies\SettingPolicy;
 use App\Infrastructure\Persistence\Support\BranchContext;
@@ -51,11 +54,21 @@ use Livewire\Livewire;
  *   PT13 (diskon Rp150rb → approval TH1)  → lihat "PT7/PT13" di bawah
  *   PT14 (diskon 2 baris total TA2)       → lihat "PT14" di bawah
  *
- * MASIH DITUNDA — model/modul terkait belum menjadi fokus fase manapun
- * yang sudah menutupnya secara eksplisit:
- *   PT12 (Gudang buka PO tanpa harga)     → Procurement (T5.1 ada, PT12 belum ditulis)
- *   PT15 (penyesuaian stok TH3b)          → ✅ sudah ditutup T3.5
- *   PT16 (harga di bawah HPP TH5c)        → Master Data (T2.5 ada, TH5c belum ditegakkan sama sekali)
+ * DITUTUP di sini (pasca-Fase 5) — dikonfirmasi pengguna (AskUserQuestion)
+ * sebelum implementasi, karena keduanya butuh keputusan desain di luar
+ * sekadar "tulis test untuk mekanisme yang sudah ada":
+ *   PT12 (Gudang buka PO tanpa harga)     → lihat "PT12" di bawah. Keputusan:
+ *     Gudang TETAP tidak diberi akses Purchase Order sama sekali (bukan
+ *     akses baca dengan harga disembunyikan) — bug NYATA ditemukan selama
+ *     investigasi (`view_goods_receipt` hilang dari permission Gudang,
+ *     lihat `PermissionSeeder`) diperbaiki di commit yang sama.
+ *   PT16 (harga di bawah HPP TH5c)        → lihat `ProductPolicy`/
+ *     `ChangeProductSellingPriceAction`/`ProductPriceApprovalTest.php`.
+ *     Keputusan: TH5a/TH5b/TH5c dibangun BERSAMAAN (satu mekanisme
+ *     approval baru dipakai bertiga), bukan hanya TH5c — lihat docblock
+ *     `ChangeProductSellingPriceAction` untuk detail lengkap.
+ * PT15 (penyesuaian stok TH3b) — ✅ sudah ditutup T3.5, dicatat sebagai
+ * referensi silang saja.
  *
  * Modul-modul di atas WAJIB menambahkan test PT-nya sendiri saat dibangun
  * — dicatat di CLAUDE.md §11/§13, bukan celah tersembunyi. Mekanisme yang
@@ -411,4 +424,82 @@ it('PT14 — diskon dipecah dua baris tetap ditegakkan pada TOTAL transaksi (TA2
         ->where('approvable_id', $sale->id)
         ->where('status', ApprovalStatus::Pending)
         ->exists())->toBeTrue();
+});
+
+/**
+ * PT12 — Gudang (PERAN NYATA) dapat menjalankan pekerjaan intinya
+ * (menerima barang) tapi tidak pernah menerima harga Purchase Order.
+ *
+ * Bug NYATA ditemukan saat investigasi (bukan hanya kesenjangan test):
+ * `view_goods_receipt` hilang dari `$gudangPermissions` sejak awal
+ * (`PermissionSeeder`) — Filament Create page mensyaratkan `viewAny` DAN
+ * `create` untuk mount (gotcha yang sama T5.6), jadi Gudang sebelumnya
+ * TIDAK PERNAH BISA membuka halaman Create Goods Receipt sama sekali.
+ * Lolos tanpa terdeteksi karena `GoodsReceiptResourceTest` selalu memakai
+ * permission ad-hoc, bukan peran `gudang` hasil seed sungguhan — pola gap
+ * yang sama dengan PT1/PT2/PT5/PT7/PT13/PT14. Diperbaiki di commit yang
+ * sama dengan test ini.
+ *
+ * Keputusan desain (dikonfirmasi pengguna): Gudang TETAP tidak diberi
+ * akses Purchase Order sama sekali — bukan akses baca dengan harga
+ * disembunyikan. PT12 ditutup dengan membuktikan harga PO secara
+ * STRUKTURAL tidak pernah bisa sampai ke Gudang: mereka tidak pernah bisa
+ * membuka `PurchaseOrderResource` sama sekali, dan satu-satunya titik
+ * singgung dengan PO (field `purchase_order_id` di form Goods Receipt,
+ * murni ketertelusuran lewat `document_number`) tidak pernah menyebut
+ * `unit_price` di skemanya.
+ */
+it('PT12 — Gudang (peran nyata) dapat menerima barang tapi tidak pernah melihat harga Purchase Order', function () {
+    $branch = Branch::factory()->create();
+    $gudang = User::factory()->for($branch, 'defaultBranch')->create();
+    $gudang->assignRole('gudang');
+
+    expect($gudang->can('perform_goods_receipt'))->toBeTrue()
+        ->and($gudang->can('view_goods_receipt'))->toBeTrue();
+
+    expect($gudang->can('view_purchase_orders'))->toBeFalse()
+        ->and($gudang->can('create_purchase_order'))->toBeFalse()
+        ->and((new PurchaseOrderPolicy)->viewAny($gudang))->toBeFalse();
+
+    $formSource = file_get_contents(app_path('Presentation/Filament/Resources/GoodsReceipts/Schemas/GoodsReceiptForm.php'));
+
+    expect($formSource)->not->toBeFalse()
+        ->and($formSource)->not->toContain('unit_price');
+});
+
+/**
+ * PT16 — perubahan harga jual Produk di bawah HPP batch tertua (TH5c)
+ * SELALU memicu Approval tertunda, tidak peduli aktor punya permission
+ * `manage_product_prices` sekalipun (Admin, bukan sekadar peran tanpa izin
+ * sama sekali seperti PT1-PT14). `ChangeProductSellingPriceActionTest.php`
+ * sudah membuktikan mekanisme TH5a/TH5b/TH5c secara generik lewat
+ * permission ad-hoc — test ini menutup rantai ke peran `admin` hasil seed
+ * SUNGGUHAN, pola sama PT7/PT13.
+ */
+it('PT16 — Admin (peran nyata) mengajukan harga di bawah HPP batch tertua tetap menunggu Approval', function () {
+    $branch = Branch::factory()->create();
+    $admin = User::factory()->for($branch, 'defaultBranch')->create();
+    $admin->assignRole('admin');
+    $this->actingAs($admin);
+
+    expect($admin->can('manage_product_prices'))->toBeTrue();
+
+    $product = Product::factory()->create(['selling_price' => '100000.00']);
+    StockBatch::factory()->create([
+        'branch_id' => $branch->id,
+        'product_id' => $product->id,
+        'unit_cost' => '96000.00',
+        'qty_received' => '5.0000',
+        'qty_remaining' => '5.0000',
+        'received_at' => now()->subDay(),
+    ]);
+
+    // Rp95.500 — turun hanya 4,5% (di bawah TH5b 5%) tapi di bawah HPP
+    // batch tertua (Rp96.000): murni TH5c yang memicu.
+    $result = app(ChangeProductSellingPriceAction::class)->execute($product, '95500.00');
+
+    expect($result)->toBeInstanceOf(Approval::class)
+        ->and($result->status)->toBe(ApprovalStatus::Pending);
+
+    expect((string) $product->fresh()->selling_price)->toEqual('100000.00');
 });

@@ -14,23 +14,30 @@ use App\Infrastructure\Persistence\Models\User;
  * di bawah menolak node cabang sebagai kompensasi lapis aplikasi (M02),
  * sama seperti `BranchPolicy`/`PartnerPolicy`.
  *
- * BELUM ditegakkan di sini — celah yang diketahui, bukan kelalaian:
- * TH5a/TH5b/TH5c (CLAUDE.md §10) mensyaratkan approval Owner untuk
- * kenaikan harga jual >10%, penurunan >5%, atau harga di bawah HPP batch
- * tertua. Ability `update()` di bawah HANYA memeriksa `edit_products` —
- * TIDAK membandingkan `selling_price` lama vs baru, tidak memanggil
- * `ApprovalService` (T1.9). Perbandingan harga terhadap HPP batch tertua
- * juga tidak mungkin dari Policy ini karena `stock_batches` belum ada
- * (T3.1). Penegakan TH5a-c adalah pekerjaan lapisan Service/Action
- * (mis. `ProductPriceChangeAction`) yang dipanggil dari Filament Resource
- * (T2.9) atau task Inventory (T3), bukan tanggung jawab Policy model.
+ * TH5a/TH5b/TH5c (CLAUDE.md §10, penutupan PT16) — DITEGAKKAN, tapi TIDAK
+ * di `update()` di bawah. `update()` tetap HANYA memeriksa `edit_products`
+ * (izin mengedit record SAMA SEKALI — nama, SKU, kategori, dst.).
+ * Perbandingan `selling_price` lama-vs-baru dan HPP batch tertua terjadi
+ * di `ChangeProductSellingPriceAction`, dipanggil dari
+ * `EditProduct::handleRecordUpdate()` HANYA saat field itu benar-benar
+ * berubah — Policy model tidak cocok menampung logika ini karena
+ * `update()` menerima state BARU sebagai array `$data` Filament, bukan
+ * dua nilai untuk dibandingkan bersama query `stock_batches`.
  *
- * `manage_product_prices`, `manage_product_stock`, `manage_product_variants`,
- * `manage_product_discontinue` (PermissionSeeder, T1.5) belum digunakan —
- * reserved untuk fitur granular yang belum dibangun (gating field harga
- * khusus, aksi stok dari halaman produk, varian produk, alur discontinue
- * eksplisit). Tidak ada satu pun yang dikonfirmasi dalam scope MVP saat
- * ini di luar nama permission-nya sendiri.
+ * `approve()` (baru) — memutuskan Approval TH5a/TH5b/TH5c yang tertunda,
+ * digerbang permission YANG SAMA dengan yang mengizinkan permintaan itu
+ * diajukan (`manage_product_prices`) — pola identik `SalePolicy::approve()`
+ * (`manage_sale_discount` menggerbang KEDUANYA). Konsekuensi yang sama juga
+ * berlaku di sini seperti di Sales: karena Owner DAN Admin sama-sama punya
+ * `manage_product_prices`, secara teknis Admin bisa menyetujui permintaan
+ * miliknya sendiri — bukan celah baru, karakteristik yang sudah diterima
+ * di seluruh sistem approval sejak Fase 4 (tidak ada modul mana pun yang
+ * mencegah self-approval lewat permission terpisah).
+ *
+ * `manage_product_stock`, `manage_product_variants`,
+ * `manage_product_discontinue` (PermissionSeeder, T1.5) MASIH belum
+ * digunakan — reserved untuk fitur granular yang belum dibangun (aksi
+ * stok dari halaman produk, varian produk, alur discontinue eksplisit).
  */
 class ProductPolicy
 {
@@ -54,6 +61,11 @@ class ProductPolicy
     public function update(User $user, Product $product): bool
     {
         return $user->can('edit_products') && $this->nodeCanWriteMasterData();
+    }
+
+    public function approve(User $user, Product $product): bool
+    {
+        return $user->can('manage_product_prices') && $this->nodeCanWriteMasterData();
     }
 
     public function delete(User $user, Product $product): bool

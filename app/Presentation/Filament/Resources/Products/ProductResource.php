@@ -22,9 +22,10 @@ use Filament\Tables\Table;
  *
  * §16 peringatan #5 — form/tabel ini TIDAK menampilkan field harga beli
  * apa pun (tidak ada kolomnya di model — lihat migration T2.5). Approval
- * TH5a-c untuk perubahan `selling_price` di atas ambang BELUM ditegakkan
- * di sini — gap yang sama seperti didokumentasikan di `ProductPolicy`,
- * bukan terlewat tanpa sengaja.
+ * TH5a-c untuk perubahan `selling_price` di atas ambang DITEGAKKAN
+ * (penutupan PT16) di `EditProduct::handleRecordUpdate()` lewat
+ * `ChangeProductSellingPriceAction` — bukan di form/tabel ini langsung,
+ * lihat docblock kedua berkas itu untuk desain lengkap.
  */
 class ProductResource extends Resource
 {

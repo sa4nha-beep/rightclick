@@ -217,6 +217,22 @@ class PermissionSeeder extends Seeder
 
         // Gudang — inventory operations saja. `request_approval` (penyesuaian
         // di atas TH3 tetap tersimpan menunggu approval).
+        //
+        // `view_goods_receipt` (pekerjaan pasca-Fase 5, penutupan PT12) — bug ditemukan saat menutup PT12:
+        // permission ini HILANG dari daftar sejak awal, padahal
+        // `perform_goods_receipt` sudah ada. Filament Create page mensyaratkan
+        // `viewAny` DAN `create` untuk mount (gotcha yang sama ditemukan T5.6)
+        // — akibatnya Gudang, yang pekerjaan intinya menerima barang,
+        // TIDAK PERNAH BISA membuka halaman Create Goods Receipt sama sekali
+        // sejak T5.2 dibangun. Lolos tanpa terdeteksi karena
+        // `GoodsReceiptResourceTest` selalu memakai `makeTestUser(['perform_goods_receipt', 'view_goods_receipt'])`
+        // (permission ad-hoc), tidak pernah peran `gudang` hasil seed
+        // sungguhan — pola gap yang sama persis dengan T5.9 (PT1/PT2/PT5/
+        // PT7/PT13/PT14). Gudang TETAP TIDAK diberi akses Purchase Order
+        // sama sekali (keputusan desain PT12, dikonfirmasi pengguna) —
+        // satu-satunya titik singgung Gudang dengan PO adalah field
+        // `purchase_order_id` di form Goods Receipt (murni ketertelusuran,
+        // tidak pernah menampilkan `unit_price`).
         $gudangPermissions = [
             'view_stock',
             'view_batches',
@@ -225,6 +241,7 @@ class PermissionSeeder extends Seeder
             'perform_adjustment',
             'perform_transfer',
             'perform_goods_receipt',
+            'view_goods_receipt',
             'perform_stock_return',
             'view_transfer_history',
             'manage_serial_numbers',
