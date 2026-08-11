@@ -549,6 +549,19 @@ Bug ini SUDAH ADA sejak T1.10 (logo pertama kali "disambungkan") — lolos tanpa
 
 **Perbaikan:** `git mv resources/images/brand/* public/images/brand/` (14 file — 6 varian logo + 7 aset favicon, riwayat git dipertahankan lewat rename, bukan hapus-lalu-buat-baru). Diverifikasi lewat `curl -k --resolve rightclick.localhost:8443:127.0.0.1` — kedua endpoint yang sebelumnya 404 (`HK-LOGO-01-Primary-Horizontal.svg`, `favicon/favicon.svg`) sekarang 200. Tidak perlu rebuild Vite (aset ini murni statis, tidak diproses `@vite()`) — perubahan langsung berlaku karena codebase di-mount sebagai volume ke container, bukan di-copy saat build image.
 
+### Lanjutan — dua permukaan TANPA logo sama sekali (bukan cuma path salah)
+
+User tetap melaporkan "tampilan berantakan" setelah fix di atas — audit lanjutan terhadap SELURUH view kustom (`resources/views/**/*.blade.php`, di luar komponen bawaan Filament yang sudah benar sejak T1.10) menemukan gap fungsional nyata, bukan sekadar path: `pos/terminal.blade.php` dan `pos/receipt.blade.php` — dua-duanya SATU-SATUNYA permukaan aplikasi yang sepenuhnya di luar tema Filament (`App\Presentation\Pos`, T4.4) — TIDAK PERNAH merender logo HAEN KOMPUTER sama sekali, hanya teks polos. Halaman login (`Filament\Auth\Pages\Login` bawaan lewat kelas `Login` kustom, T1.11) sudah benar karena mewarisi layout `.fi-simple-header` Filament yang sudah digerbang CSS logo sejak T1.10 — gap ini murni di dua view POS yang dibangun manual di luar sistem itu.
+
+Signifikan secara spesifik untuk nota: `HS-TASKS-RIGHTCLICK-v1.1` asli (T4.11, UT17 — "logo terbaca") secara eksplisit mensyaratkan logo varian **1-Color-Positive** pada nota thermal — bukan pengawasan kecil, tapi acceptance criterion yang belum pernah diimplementasikan sejak T4.4/T4.11 self-derived.
+
+**Perbaikan:**
+- `pos/terminal.blade.php` — header kini merender `HK-LOGO-01-Primary-Horizontal.svg` (varian cyan, sama dipakai topbar panel Filament) di sebelah teks "POS — {nama kasir}", konsisten dengan latar putih permukaan ini.
+- `pos/receipt.blade.php` — menambah `HK-LOGO-04-1Color-Positive.svg` (hitam solid, BUKAN cyan — satu-satunya warna yang aman untuk printer thermal 58/80mm hitam-putih) di atas nama cabang. Diverifikasi: `diff` kedua file SVG menunjukkan geometri identik dengan `HK-LOGO-01`, hanya `fill` yang beda (`#000000` vs `#00B4D4`) — konfirmasi variant ini memang dirancang khusus untuk kasus pakai satu-warna.
+- Test baru: `PosTerminalTest` (assert HTML logo termuat) dan `SaleReceiptTest` (assert varian 1-Color-Positive termuat, DAN varian cyan TIDAK termuat — membuktikan variant yang benar dipilih, bukan sekadar "ada logo").
+
+Full test suite 609 pass (+1), PHPStan level 6 bersih, Pint bersih, `composer audit` bersih.
+
 ---
 
 ## 12. Acceptance Criteria — Kunci

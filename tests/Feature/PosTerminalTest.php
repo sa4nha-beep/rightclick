@@ -48,6 +48,11 @@ it('menampilkan form buka shift bila belum ada shift terbuka', function () {
         ->assertSee('Buka Shift');
 });
 
+it('menampilkan logo HAEN KOMPUTER di header — sebelumnya POS satu-satunya permukaan tanpa branding', function () {
+    Livewire::test(PosTerminal::class)
+        ->assertSeeHtml('HK-LOGO-01-Primary-Horizontal.svg');
+});
+
 it('openShift membuka shift baru untuk kasir yang login', function () {
     Livewire::test(PosTerminal::class)
         ->set('openingCashInput', '500000')

@@ -52,6 +52,12 @@ it('AC-14/R13 — nota tidak mengandung PPN dalam bentuk apa pun', function () {
     $response->assertOk();
     $content = $response->getContent();
 
+    // UT17 (T4.11 asli, sebelumnya belum tertutup) — logo WAJIB tampil di
+    // nota, varian 1-Color-Positive (hitam solid, aman untuk printer
+    // thermal), BUKAN varian cyan HK-LOGO-01 yang dipakai topbar/POS.
+    expect($content)->toContain('HK-LOGO-04-1Color-Positive.svg')
+        ->not->toContain('HK-LOGO-01-Primary-Horizontal.svg');
+
     expect($content)->not->toContain('PPN')
         ->not->toContain('Ppn')
         ->not->toContain('ppn')

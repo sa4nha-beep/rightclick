@@ -30,9 +30,22 @@
             padding: 2px 0;
             margin-bottom: 6px;
         }
+        .receipt-logo {
+            display: block;
+            width: 220px;
+            height: auto;
+            margin: 0 auto 6px auto;
+        }
     </style>
 </head>
 <body>
+    {{-- T4.11 asli (UT17: "logo terbaca") — sebelumnya nota TIDAK menampilkan
+         logo sama sekali. Varian 1-Color-Positive (hitam solid, BUKAN cyan
+         #00B4D4 dari HK-LOGO-01) — satu-satunya warna yang dijamin tercetak
+         benar pada printer thermal 58/80mm hitam-putih. --}}
+    <img src="{{ asset('images/brand/HK-LOGO-04-1Color-Positive.svg') }}"
+         alt="HAEN KOMPUTER" class="receipt-logo">
+
     {{-- T4.11/UT14: cetak ulang WAJIB bertanda "SALINAN" — ditentukan dari
          riwayat audit log (lihat docblock ShowSaleReceiptController), bukan
          dari field pada `$sale` sendiri. --}}

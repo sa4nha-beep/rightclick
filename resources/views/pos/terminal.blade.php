@@ -17,8 +17,17 @@
         </div>
     @endunless
 
+    {{-- Brand identity (HS-UI §5) — sebelumnya POS TIDAK menampilkan logo
+         sama sekali, satu-satunya permukaan aplikasi tanpa branding HAEN
+         KOMPUTER. Varian Primary Horizontal (cyan), sama dipakai topbar
+         panel Filament (`filament-theme.css` `.fi-topbar .rc-brand-logo-primary`)
+         — latar putih, konsisten lintas kedua permukaan. --}}
     <div class="mb-4 flex items-center justify-between">
-        <h1 class="text-xl font-semibold">POS — {{ auth()->user()->name }}</h1>
+        <div class="flex items-center gap-3">
+            <img src="{{ asset('images/brand/HK-LOGO-01-Primary-Horizontal.svg') }}"
+                 alt="HAEN KOMPUTER" style="width: 180px; height: auto;">
+            <h1 class="text-xl font-semibold">POS — {{ auth()->user()->name }}</h1>
+        </div>
         <a href="{{ route('filament.admin.pages.dashboard') }}" class="text-sm underline">Kembali ke Back Office</a>
     </div>
 
