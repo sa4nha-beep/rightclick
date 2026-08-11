@@ -216,11 +216,15 @@ html {
 }
 
 /*
- * Filament Links: Cyan dengan underline saat hover
- * Kontras: teks cyan pada putih hanya boleh untuk tautan ≥16px dengan underline
+ * Filament Links: Cyan, SELALU bergaris bawah — bukan hanya saat hover.
+ * Aturan kontras mengikat (§9): teks cyan pada putih (≈2,6:1) hanya boleh
+ * untuk tautan ≥16px Medium BERGARIS BAWAH. "Underline saat hover saja"
+ * tidak memenuhi syarat itu — pengguna tidak bisa membedakan tautan dari
+ * teks biasa sebelum mengarahkan mouse (dan tidak pernah bagi pengguna
+ * sentuh/keyboard sama sekali).
  */
 a {
-  @apply hover:underline;
+  @apply underline;
   color: var(--haen-cyan);
 }
 
