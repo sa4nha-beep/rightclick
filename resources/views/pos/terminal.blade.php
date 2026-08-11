@@ -1,4 +1,14 @@
-<div class="min-h-screen p-4">
+{{--
+    T4.5/UT1: pintasan papan ketik — mapping self-derived (HS-UI-RIGHTCLICK-v1.1
+    tidak ada di repo untuk dirujuk persis), lihat docblock PosTerminal.
+    PV7 tetap berlaku: murni fokus/aksi terprogram, tanpa transisi visual apa pun.
+--}}
+<div class="min-h-screen p-4" x-data
+     @keydown.window.f1.prevent="$refs.searchInput && $refs.searchInput.focus()"
+     @keydown.window.f2.prevent="$refs.lastQtyInput && $refs.lastQtyInput.focus()"
+     @keydown.window.f3.prevent="$wire.checkout()"
+     @keydown.window.f4.prevent="$wire.clearCart()"
+     @keydown.window.escape="$wire.set('search', '')">
     {{-- U8 — banner konektivitas HQ, murni informatif, tidak pernah menonaktifkan checkout --}}
     @unless($this->isConnectedToHq())
         <div class="mb-4 rounded border-2 border-black bg-[var(--haen-gray-100)] p-3 text-sm">
@@ -61,8 +71,12 @@
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {{-- Katalog produk/jasa --}}
             <div class="lg:col-span-2">
-                <input type="search" wire:model.live.debounce.300ms="search" placeholder="Cari produk atau jasa..."
-                       class="mb-3 w-full rounded border-2 border-black p-2">
+                <input type="search" x-ref="searchInput" wire:model.live.debounce.300ms="search"
+                       wire:keydown.enter.prevent="addFirstMatch" placeholder="Cari produk atau jasa... (Enter=tambah hasil pertama)"
+                       class="mb-1 w-full rounded border-2 border-black p-2">
+                <p class="mb-3 text-xs text-[var(--haen-gray-600)]">
+                    F1 pencarian &middot; F2 qty baris terakhir &middot; F3 bayar &middot; F4 kosongkan keranjang &middot; Esc reset pencarian
+                </p>
 
                 <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                     @foreach ($products as $product)
@@ -98,15 +112,29 @@
                 @endif
 
                 @foreach ($cart as $index => $line)
-                    <div class="mb-2 flex items-center justify-between border-b border-[var(--haen-gray-300)] pb-2 text-sm" wire:key="cart-{{ $line['key'] }}">
-                        <div class="flex-1">
-                            <div>{{ $line['name'] }}</div>
-                            <div class="text-xs text-[var(--haen-gray-600)]">Rp{{ number_format((float) $line['unit_price'], 0, ',', '.') }} / unit</div>
+                    <div class="mb-2 border-b border-[var(--haen-gray-300)] pb-2 text-sm" wire:key="cart-{{ $line['key'] }}">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <div>{{ $line['name'] }}</div>
+                                <div class="text-xs text-[var(--haen-gray-600)]">Rp{{ number_format((float) $line['unit_price'], 0, ',', '.') }} / unit</div>
+                            </div>
+                            <input type="number" step="0.0001" min="0.0001"
+                                   @if ($loop->last) x-ref="lastQtyInput" @endif
+                                   wire:model.blur="cart.{{ $index }}.quantity"
+                                   class="w-16 rounded border border-black p-1 text-right">
+                            <button wire:click="removeLine('{{ $line['key'] }}')" class="ml-2 text-[var(--state-danger)]" aria-label="Hapus">&times;</button>
                         </div>
-                        <input type="number" step="0.0001" min="0.0001"
-                               wire:model.blur="cart.{{ $index }}.quantity"
-                               class="w-16 rounded border border-black p-1 text-right">
-                        <button wire:click="removeLine('{{ $line['key'] }}')" class="ml-2 text-[var(--state-danger)]" aria-label="Hapus">&times;</button>
+
+                        @if ($line['is_serialized'] ?? false)
+                            {{-- T4.9/UT5: produk serial wajib mengisi satu serial number per unit
+                                 sebelum pembayaran diproses (divalidasi ulang di server saat finalisasi). --}}
+                            <label class="mt-1 block text-xs font-medium">
+                                Serial Number (satu per baris, {{ $line['quantity'] }} dibutuhkan)
+                            </label>
+                            <textarea wire:model.blur="cart.{{ $index }}.serial_numbers_input" rows="2"
+                                      placeholder="Ketik/scan satu serial per baris"
+                                      class="w-full rounded border-2 border-black p-1 text-xs"></textarea>
+                        @endif
                     </div>
                 @endforeach
 

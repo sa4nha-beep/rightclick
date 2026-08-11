@@ -23,4 +23,5 @@ enum AuditAction: string
     case Approved = 'approved';
     case Rejected = 'rejected';
     case AccessDenied = 'access_denied';
+    case Reprinted = 'reprinted';
 }

@@ -9,6 +9,7 @@ use App\Application\Services\CashLedgerService;
 use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
 use App\Application\Services\OutboxService;
+use App\Application\Services\SerialNumberValidationService;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Inventory\Enums\StockMutationType;
@@ -72,6 +73,7 @@ final class FinalizeSaleAction
         private readonly ApprovalService $approvals,
         private readonly CashLedgerService $cashLedger,
         private readonly OutboxService $outbox,
+        private readonly SerialNumberValidationService $serialNumbers,
     ) {}
 
     public function execute(Sale $sale): Sale
@@ -227,6 +229,14 @@ final class FinalizeSaleAction
         foreach ($sale->items as $item) {
             if (bccomp((string) $item->quantity, '0', 4) <= 0) {
                 throw new SaleValidationException('Kuantitas baris penjualan harus lebih dari nol.');
+            }
+
+            // T4.9/UT5: wajib serial number untuk produk `is_serialized`, ditegakkan
+            // di sini — SEBELUM mutasi stok/kas apa pun — bukan hanya di UI POS,
+            // konsisten dengan cara `SerialNumberValidationService` sudah dipakai
+            // finalize action lain (T3.7). Baris jasa (`product_id` null) dilewati.
+            if ($item->product_id !== null) {
+                $this->serialNumbers->validate($item->product, (string) $item->quantity, $item->serial_numbers);
             }
         }
     }

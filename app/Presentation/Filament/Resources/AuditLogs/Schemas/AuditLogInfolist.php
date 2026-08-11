@@ -32,7 +32,7 @@ class AuditLogInfolist
                                     ->badge()
                                     ->color(fn (AuditAction $state): string => match ($state) {
                                         AuditAction::Created, AuditAction::Approved, AuditAction::Restored => 'success',
-                                        AuditAction::Updated, AuditAction::Finalized => 'info',
+                                        AuditAction::Updated, AuditAction::Finalized, AuditAction::Reprinted => 'info',
                                         AuditAction::Deleted, AuditAction::SoftDeleted, AuditAction::Voided,
                                         AuditAction::Rejected, AuditAction::AccessDenied => 'danger',
                                     }),

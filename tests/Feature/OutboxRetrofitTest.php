@@ -151,7 +151,7 @@ it('sale_return.finalized dan sale_return.voided tercatat di outbox', function (
 it('cashier_shift.finalized dan cashier_shift.voided tercatat di outbox', function () {
     $shift = CashierShift::factory()->create(['branch_id' => $this->branch->id, 'cashier_id' => $this->user->id]);
 
-    $closed = app(CloseCashierShiftAction::class)->execute($shift, '0');
+    $closed = app(CloseCashierShiftAction::class)->execute($shift, [['denomination' => '1000.00', 'quantity' => 0]]);
     expect(outboxEventFor($closed->getMorphClass(), $closed->id)->event_type)->toBe('cashier_shift.finalized');
 
     app(VoidCashierShiftAction::class)->execute($closed, 'Uji outbox');

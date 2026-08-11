@@ -96,4 +96,12 @@ class CashierShift extends Model
     {
         return $this->hasMany(Sale::class);
     }
+
+    /**
+     * @return HasMany<CashierShiftCount, $this>
+     */
+    public function counts(): HasMany
+    {
+        return $this->hasMany(CashierShiftCount::class);
+    }
 }

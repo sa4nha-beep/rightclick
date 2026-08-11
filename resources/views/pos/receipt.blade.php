@@ -22,9 +22,24 @@
         @media print {
             .no-print { display: none; }
         }
+        .watermark-salinan {
+            text-align: center;
+            font-weight: bold;
+            letter-spacing: 2px;
+            border: 2px solid #000;
+            padding: 2px 0;
+            margin-bottom: 6px;
+        }
     </style>
 </head>
 <body>
+    {{-- T4.11/UT14: cetak ulang WAJIB bertanda "SALINAN" — ditentukan dari
+         riwayat audit log (lihat docblock ShowSaleReceiptController), bukan
+         dari field pada `$sale` sendiri. --}}
+    @if ($isReprint ?? false)
+        <p class="watermark-salinan">*** SALINAN ***</p>
+    @endif
+
     <h1>{{ $sale->branch->name }}</h1>
     @if ($sale->branch->address)
         <p class="center">{{ $sale->branch->address }}</p>

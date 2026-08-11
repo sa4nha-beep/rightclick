@@ -11,6 +11,7 @@ use App\Infrastructure\Persistence\Models\CashierShift;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -80,15 +81,34 @@ class CashierShiftsTable
                     ->requiresConfirmation()
                     ->visible(fn (CashierShift $record): bool => auth()->user()?->can('close', $record) ?? false)
                     ->schema([
-                        TextInput::make('closing_cash_counted')
-                            ->label('Kas Fisik Dihitung')
-                            ->numeric()
-                            ->prefix('Rp')
-                            ->required()
-                            ->minValue(0),
+                        // Bagian AC-16 asli (HS-TASKS-RIGHTCLICK-v1.1 T4.2: "hitung
+                        // per pecahan") — bukan lagi satu angka agregat. Bukan
+                        // Repeater::relationship(): form ini ephemeral (aksi tabel,
+                        // bukan halaman Resource penuh), baris disimpan lewat
+                        // CloseCashierShiftAction::execute(), bukan langsung Eloquent.
+                        Repeater::make('denomination_counts')
+                            ->label('Hitung Kas per Pecahan')
+                            ->schema([
+                                TextInput::make('denomination')
+                                    ->label('Pecahan')
+                                    ->numeric()
+                                    ->prefix('Rp')
+                                    ->required()
+                                    ->minValue(0.01),
+                                TextInput::make('quantity')
+                                    ->label('Jumlah Lembar/Koin')
+                                    ->numeric()
+                                    ->integer()
+                                    ->required()
+                                    ->minValue(0)
+                                    ->default(0),
+                            ])
+                            ->columns(2)
+                            ->minItems(1)
+                            ->required(),
                     ])
                     ->action(function (CashierShift $record, array $data) {
-                        $result = app(CloseCashierShiftAction::class)->execute($record, (string) $data['closing_cash_counted']);
+                        $result = app(CloseCashierShiftAction::class)->execute($record, $data['denomination_counts']);
 
                         $variance = (float) $result->variance;
 

@@ -46,7 +46,7 @@ final class SyncEventApplier
     private const REGISTRY = [
         'sale' => ['table' => 'sales', 'children' => ['items' => 'sale_items', 'payments' => 'sale_payments']],
         'sale_return' => ['table' => 'sale_returns', 'children' => ['lines' => 'sale_return_lines']],
-        'cashier_shift' => ['table' => 'cashier_shifts', 'children' => []],
+        'cashier_shift' => ['table' => 'cashier_shifts', 'children' => ['counts' => 'cashier_shift_counts']],
         'stock_adjustment' => ['table' => 'stock_adjustments', 'children' => ['lines' => 'stock_adjustment_lines']],
         'stock_opname' => ['table' => 'stock_opnames', 'children' => ['lines' => 'stock_opname_lines']],
         'stock_transfer' => ['table' => 'stock_transfers', 'children' => ['lines' => 'stock_transfer_lines']],

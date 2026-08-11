@@ -27,6 +27,14 @@ use Illuminate\Support\Facades\DB;
  * Begitu `finalize()` dipanggil, `HasDocumentState` mengunci seluruh field
  * shift ini — "selisih tidak dapat disesuaikan" (AC-16) ditegakkan
  * struktural, bukan lewat pengecekan manual di sini.
+ *
+ * Penutup gap AC-16 asli (`HS-TASKS-RIGHTCLICK-v1.1` T4.2: "hitung per
+ * pecahan") — `closing_cash_counted` TIDAK LAGI diterima sebagai satu
+ * angka agregat, melainkan DIHITUNG dari baris `cashier_shift_counts`
+ * (`denomination` × `quantity` per pecahan, dijumlahkan di sini). Baris
+ * breakdown ditulis ke tabel TERPISAH (bukan kolom di `cashier_shifts`
+ * sendiri) — tidak tersentuh guard `HasDocumentState` sama sekali karena
+ * dibuat SEBELUM `finalize()` dipanggil.
  */
 final class CloseCashierShiftAction
 {
@@ -36,15 +44,39 @@ final class CloseCashierShiftAction
         private readonly OutboxService $outbox,
     ) {}
 
-    public function execute(CashierShift $shift, string $closingCashCounted): CashierShift
+    /**
+     * @param  array<int, array{denomination: string, quantity: int}>  $denominationCounts
+     */
+    public function execute(CashierShift $shift, array $denominationCounts): CashierShift
     {
-        return DB::transaction(function () use ($shift, $closingCashCounted) {
+        return DB::transaction(function () use ($shift, $denominationCounts) {
             if ($shift->state !== DocumentState::Draft) {
                 throw new CashierShiftException('Shift ini sudah tidak terbuka — tidak dapat ditutup lagi.');
             }
 
-            if (bccomp($closingCashCounted, '0', 2) < 0) {
-                throw new CashierShiftException('Kas fisik yang dihitung tidak boleh negatif.');
+            if ($denominationCounts === []) {
+                throw new CashierShiftException('Hitung kas per pecahan wajib diisi minimal satu baris.');
+            }
+
+            $closingCashCounted = '0';
+            $rows = [];
+
+            foreach ($denominationCounts as $count) {
+                $denomination = (string) $count['denomination'];
+                $quantity = (int) $count['quantity'];
+
+                if (bccomp($denomination, '0', 2) <= 0) {
+                    throw new CashierShiftException('Pecahan uang harus lebih besar dari nol.');
+                }
+
+                if ($quantity < 0) {
+                    throw new CashierShiftException('Jumlah lembar/koin tidak boleh negatif.');
+                }
+
+                $subtotal = bcmul($denomination, (string) $quantity, 2);
+                $closingCashCounted = bcadd($closingCashCounted, $subtotal, 2);
+
+                $rows[] = ['denomination' => $denomination, 'quantity' => $quantity, 'subtotal' => $subtotal];
             }
 
             $expected = $this->computeExpectedCash($shift);
@@ -55,11 +87,13 @@ final class CloseCashierShiftAction
             $shift->document_number = $this->documentNumbers->next(DocumentType::CashierShift, $shift->branch);
             $shift->save();
 
+            $shift->counts()->createMany($rows);
+
             $this->documentStates->finalize($shift);
 
-            $this->outbox->record($shift->branch, $shift, 'cashier_shift.finalized');
+            $this->outbox->record($shift->branch, $shift, 'cashier_shift.finalized', ['counts']);
 
-            return $shift->fresh();
+            return $shift->fresh(['counts']);
         });
     }
 

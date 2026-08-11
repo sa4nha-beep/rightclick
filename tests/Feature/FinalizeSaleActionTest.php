@@ -6,6 +6,7 @@ use App\Application\Actions\FinalizeSaleAction;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Inventory\Enums\StockMutationType;
+use App\Domain\Inventory\Exceptions\StockDocumentValidationException;
 use App\Domain\Sales\Enums\PaymentStatus;
 use App\Domain\Sales\Exceptions\SaleValidationException;
 use App\Domain\Shared\Enums\ApprovalStatus;
@@ -293,6 +294,60 @@ it('T5.4 — pembayaran tunai menerbitkan CashEntry kas masuk yang merujuk Sale'
 
     expect($entry->entry_type)->toBe(CashEntryType::SalePayment)
         ->and((string) $entry->amount)->toEqual('15000.00');
+});
+
+it('T4.9/UT5 — produk is_serialized tanpa serial number ditolak, stok tidak tersentuh', function () {
+    $serialized = Product::factory()->create(['is_serialized' => true]);
+    DB::transaction(fn () => app(StockLedgerService::class)->receive(
+        $this->branch, $serialized, '2.0000', '10000.00', now(), Branch::factory()->create(),
+        StockMutationType::Receipt,
+    ));
+
+    $sale = makeSaleWithProductLine($this->branch, $this->shift, $serialized, '2.0000', '15000.00');
+    $sale->payments()->create(['method' => 'cash', 'amount' => '30000.00']);
+
+    expect(fn () => $this->action->execute($sale))->toThrow(StockDocumentValidationException::class);
+    expect(app(StockLedgerService::class)->availableQuantity($this->branch, $serialized))->toEqual('2.0000');
+});
+
+it('T4.9/UT5 — produk is_serialized dengan jumlah serial tidak sesuai quantity ditolak', function () {
+    $serialized = Product::factory()->create(['is_serialized' => true]);
+    DB::transaction(fn () => app(StockLedgerService::class)->receive(
+        $this->branch, $serialized, '2.0000', '10000.00', now(), Branch::factory()->create(),
+        StockMutationType::Receipt,
+    ));
+
+    $sale = Sale::factory()->create(['branch_id' => $this->branch->id, 'cashier_shift_id' => $this->shift->id]);
+    $sale->items()->create([
+        'product_id' => $serialized->id,
+        'quantity' => '2.0000',
+        'unit_price' => '15000.00',
+        'serial_numbers' => ['SN-001'],
+    ]);
+    $sale->payments()->create(['method' => 'cash', 'amount' => '30000.00']);
+
+    expect(fn () => $this->action->execute($sale))->toThrow(StockDocumentValidationException::class);
+});
+
+it('T4.9/UT5 — finalisasi berhasil saat serial number lengkap dan sesuai quantity', function () {
+    $serialized = Product::factory()->create(['is_serialized' => true]);
+    DB::transaction(fn () => app(StockLedgerService::class)->receive(
+        $this->branch, $serialized, '2.0000', '10000.00', now(), Branch::factory()->create(),
+        StockMutationType::Receipt,
+    ));
+
+    $sale = Sale::factory()->create(['branch_id' => $this->branch->id, 'cashier_shift_id' => $this->shift->id]);
+    $sale->items()->create([
+        'product_id' => $serialized->id,
+        'quantity' => '2.0000',
+        'unit_price' => '15000.00',
+        'serial_numbers' => ['SN-001', 'SN-002'],
+    ]);
+    $sale->payments()->create(['method' => 'cash', 'amount' => '30000.00']);
+
+    $result = $this->action->execute($sale);
+
+    expect($result->state)->toBe(DocumentState::Final);
 });
 
 it('T5.4 — pembayaran non-tunai TIDAK menerbitkan CashEntry', function () {

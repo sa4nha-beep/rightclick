@@ -5,7 +5,9 @@ declare(strict_types=1);
 use App\Application\Actions\FinalizeSaleAction;
 use App\Application\Services\StockLedgerService;
 use App\Domain\Inventory\Enums\StockMutationType;
+use App\Domain\Shared\Enums\AuditAction;
 use App\Domain\Shared\Enums\DocumentState;
+use App\Infrastructure\Persistence\Models\AuditLog;
 use App\Infrastructure\Persistence\Models\Branch;
 use App\Infrastructure\Persistence\Models\CashierShift;
 use App\Infrastructure\Persistence\Models\Product;
@@ -86,4 +88,45 @@ it('nota bisa diakses berulang kali (cetak ulang, NT-05) tanpa mengubah data', f
     test()->get(route('pos.receipt', $sale))->assertOk();
 
     expect($sale->fresh()->state)->toBe(DocumentState::Final);
+});
+
+it('T4.11/UT14 — cetak pertama TIDAK bertanda SALINAN, tapi tetap tercatat di audit log', function () {
+    $sale = makeFinalizedSaleForReceipt();
+
+    $response = test()->get(route('pos.receipt', $sale));
+
+    $response->assertOk();
+    expect($response->getContent())->not->toContain('SALINAN');
+
+    $entry = AuditLog::query()
+        ->where('model_type', Sale::class)
+        ->where('model_id', $sale->id)
+        ->where('action', AuditAction::Reprinted)
+        ->sole();
+
+    expect($entry->metadata['event'])->toBe('first_print');
+});
+
+it('T4.11/UT14 — cetak kedua dan seterusnya bertanda SALINAN dan tercatat sebagai reprint di audit log', function () {
+    $sale = makeFinalizedSaleForReceipt();
+
+    test()->get(route('pos.receipt', $sale))->assertOk();
+    $response = test()->get(route('pos.receipt', $sale));
+
+    $response->assertOk();
+    expect($response->getContent())->toContain('SALINAN');
+
+    // Diurutkan lewat `id` (UUID v7, presisi tinggi), BUKAN `created_at`
+    // (kolom `timestamp` presisi detik — dua entri dalam detik yang sama
+    // bisa punya `created_at` identik, gotcha yang sama dengan T5.7).
+    $entries = AuditLog::query()
+        ->where('model_type', Sale::class)
+        ->where('model_id', $sale->id)
+        ->where('action', AuditAction::Reprinted)
+        ->orderBy('id')
+        ->get();
+
+    expect($entries)->toHaveCount(2)
+        ->and($entries->first()->metadata['event'])->toBe('first_print')
+        ->and($entries->last()->metadata['event'])->toBe('reprint');
 });

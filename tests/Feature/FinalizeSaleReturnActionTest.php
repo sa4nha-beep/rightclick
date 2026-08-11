@@ -35,10 +35,18 @@ afterEach(function () {
     DB::rollBack();
 });
 
-function makeFinalizedSaleWithProductLine(FinalizeSaleAction $action, Branch $branch, CashierShift $shift, Product $product, string $qty, string $unitPrice): Sale
+/**
+ * @param  array<int, string>|null  $serialNumbers  T4.9/UT5 — wajib diisi bila $product->is_serialized.
+ */
+function makeFinalizedSaleWithProductLine(FinalizeSaleAction $action, Branch $branch, CashierShift $shift, Product $product, string $qty, string $unitPrice, ?array $serialNumbers = null): Sale
 {
     $sale = Sale::factory()->create(['branch_id' => $branch->id, 'cashier_shift_id' => $shift->id]);
-    $sale->items()->create(['product_id' => $product->id, 'quantity' => $qty, 'unit_price' => $unitPrice]);
+    $sale->items()->create([
+        'product_id' => $product->id,
+        'quantity' => $qty,
+        'unit_price' => $unitPrice,
+        'serial_numbers' => $serialNumbers,
+    ]);
     $sale->payments()->create(['method' => 'cash', 'amount' => bcmul($qty, $unitPrice, 2)]);
 
     return $action->execute($sale);
@@ -129,7 +137,7 @@ it('T3.7 — produk serial wajib mengisi serial number sejumlah kuantitas retur'
     DB::transaction(fn () => app(StockLedgerService::class)->receive(
         $this->branch, $serialized, '5.0000', '500000.00', now(), Branch::factory()->create(), StockMutationType::Receipt,
     ));
-    $sale = makeFinalizedSaleWithProductLine($this->finalizeSaleAction, $this->branch, $this->shift, $serialized, '2.0000', '750000.00');
+    $sale = makeFinalizedSaleWithProductLine($this->finalizeSaleAction, $this->branch, $this->shift, $serialized, '2.0000', '750000.00', ['SN-ORIG-1', 'SN-ORIG-2']);
     $item = $sale->items->first();
 
     $return = SaleReturn::factory()->create(['branch_id' => $this->branch->id, 'sale_id' => $sale->id]);

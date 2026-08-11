@@ -7,6 +7,7 @@ namespace App\Presentation\Pos\Livewire;
 use App\Application\Actions\FinalizeSaleAction;
 use App\Application\Services\NodeConnectivityService;
 use App\Domain\Inventory\Exceptions\InsufficientStockException;
+use App\Domain\Inventory\Exceptions\StockDocumentValidationException;
 use App\Domain\Sales\Exceptions\SaleValidationException;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Domain\Shared\Enums\PartnerType;
@@ -51,6 +52,26 @@ use Livewire\Component;
  *
  * PV7: tidak ada transisi/animasi di view (`resources/css/pos-theme.css`
  * menegakkannya lewat CSS, bukan konvensi Blade semata).
+ *
+ * T4.5/UT1 (menutup gap — `HS-TASKS-RIGHTCLICK-v1.1` tidak menspesifikasikan
+ * mapping F1-F12 persis, dan `HS-UI-RIGHTCLICK-v1.1` yang seharusnya
+ * memuatnya tidak ada di repo; mapping berikut SELF-DERIVED, mudah diganti
+ * bila dokumen UI ditemukan): F1=fokus pencarian, F2=fokus qty baris
+ * terakhir, F3=`checkout()`, F4=`clearCart()`, Esc=kosongkan kotak
+ * pencarian, Enter di pencarian=`addFirstMatch()`. Diimplementasikan via
+ * Alpine.js (dibundel Livewire 3 lewat `@livewireScripts`) di root elemen
+ * `resources/views/pos/terminal.blade.php` — BUKAN di `layouts.pos.blade.php`,
+ * karena `$wire` hanya resolve di dalam subtree komponen Livewire.
+ *
+ * T4.9/UT5 (menutup gap yang sengaja ditunda T3.7 — lihat docblock
+ * `SerialNumberValidationService`): produk `is_serialized` TIDAK PERNAH
+ * digabung otomatis ke baris keranjang yang sudah ada (`addLine()`) — serial
+ * diketik per baris lewat `serial_numbers_input` (dipisah baris baru/koma),
+ * di-parse `parseSerialNumbers()` saat checkout, lalu divalidasi WAJIB oleh
+ * `FinalizeSaleAction`/`SerialNumberValidationService` sebelum stok
+ * disentuh. Kegagalan validasi (`StockDocumentValidationException`)
+ * membatalkan transaksi database (rollback) sama seperti stok kurang —
+ * pembayaran diblokir, keranjang tetap utuh untuk diperbaiki.
  */
 #[Layout('layouts.pos')]
 #[Title('POS — RIGHTCLICK')]
@@ -58,7 +79,7 @@ class PosTerminal extends Component
 {
     public string $search = '';
 
-    /** @var array<int, array{key: string, type: string, id: string, name: string, quantity: string, unit_price: string}> */
+    /** @var array<int, array{key: string, type: string, id: string, name: string, quantity: string, unit_price: string, is_serialized: bool, serial_numbers_input: string}> */
     public array $cart = [];
 
     public ?string $partnerId = null;
@@ -117,8 +138,8 @@ class PosTerminal extends Component
 
     public function addProduct(string $productId): void
     {
-        $product = Product::query()->findOrFail($productId, ['id', 'name', 'selling_price']);
-        $this->addLine('product', (string) $product->id, (string) $product->name, (string) $product->selling_price);
+        $product = Product::query()->findOrFail($productId, ['id', 'name', 'selling_price', 'is_serialized']);
+        $this->addLine('product', (string) $product->id, (string) $product->name, (string) $product->selling_price, $product->is_serialized);
     }
 
     public function addService(string $serviceId): void
@@ -130,6 +151,38 @@ class PosTerminal extends Component
     public function removeLine(string $key): void
     {
         $this->cart = array_values(array_filter($this->cart, fn (array $line): bool => $line['key'] !== $key));
+    }
+
+    /**
+     * Pintasan F4 (T4.5/UT1) — kosongkan keranjang saja, bukan seluruh
+     * dokumen (partner/diskon/pembayaran tetap, beda dari `resetCart()`
+     * yang dipanggil setelah checkout berhasil).
+     */
+    public function clearCart(): void
+    {
+        $this->cart = [];
+    }
+
+    /**
+     * Pintasan Enter di kotak pencarian (T4.5/UT1) — tambah hasil pertama
+     * (produk diprioritaskan, jasa sebagai fallback), sama urutan tampil
+     * di katalog. Tanpa hasil sama sekali, tidak melakukan apa pun.
+     */
+    public function addFirstMatch(): void
+    {
+        $product = $this->products()->first();
+
+        if ($product !== null) {
+            $this->addProduct((string) $product->id);
+
+            return;
+        }
+
+        $service = $this->services()->first();
+
+        if ($service !== null) {
+            $this->addService((string) $service->id);
+        }
     }
 
     /**
@@ -272,6 +325,9 @@ class PosTerminal extends Component
                         'service_id' => $line['type'] === 'service' ? $line['id'] : null,
                         'quantity' => $line['quantity'],
                         'unit_price' => $line['unit_price'],
+                        'serial_numbers' => $line['is_serialized']
+                            ? self::parseSerialNumbers($line['serial_numbers_input'])
+                            : null,
                     ]);
                 }
 
@@ -285,7 +341,7 @@ class PosTerminal extends Component
 
                 return app(FinalizeSaleAction::class)->execute($sale);
             });
-        } catch (SaleValidationException|InsufficientStockException $e) {
+        } catch (SaleValidationException|InsufficientStockException|StockDocumentValidationException $e) {
             // R7/AC-10 (stok kurang) dan seluruh validasi SaleValidationException
             // (T4.1/T4.2) membatalkan TRANSAKSI DATABASE lewat rollback — tidak
             // ada draft yatim tersisa. Keranjang (state komponen, bukan DB)
@@ -316,6 +372,16 @@ class PosTerminal extends Component
         $this->resetCart();
     }
 
+    /**
+     * @return array<int, string>
+     */
+    private static function parseSerialNumbers(string $rawInput): array
+    {
+        $lines = preg_split('/[\r\n,]+/', $rawInput) ?: [];
+
+        return array_values(array_filter(array_map('trim', $lines), fn (string $serial): bool => $serial !== ''));
+    }
+
     private function resetCart(): void
     {
         $this->cart = [];
@@ -333,13 +399,18 @@ class PosTerminal extends Component
             ->first();
     }
 
-    private function addLine(string $type, string $id, string $name, string $unitPrice): void
+    private function addLine(string $type, string $id, string $name, string $unitPrice, bool $isSerialized = false): void
     {
-        foreach ($this->cart as $index => $line) {
-            if ($line['type'] === $type && $line['id'] === $id) {
-                $this->cart[$index]['quantity'] = bcadd($this->cart[$index]['quantity'], '1', 4);
+        // Produk serial TIDAK pernah digabung ke baris yang sudah ada — menaikkan
+        // quantity tanpa serial baru akan membuat jumlah serial yang diisi kasir
+        // tidak lagi cocok dengan quantity (R3, T4.9/UT5). Selalu baris baru.
+        if (! $isSerialized) {
+            foreach ($this->cart as $index => $line) {
+                if ($line['type'] === $type && $line['id'] === $id) {
+                    $this->cart[$index]['quantity'] = bcadd($this->cart[$index]['quantity'], '1', 4);
 
-                return;
+                    return;
+                }
             }
         }
 
@@ -350,6 +421,8 @@ class PosTerminal extends Component
             'name' => $name,
             'quantity' => '1',
             'unit_price' => $unitPrice,
+            'is_serialized' => $isSerialized,
+            'serial_numbers_input' => '',
         ];
     }
 

@@ -29,10 +29,14 @@ return new class extends Migration
      * dikembalikan `consume()`). NULL permanen untuk baris jasa (`service_id`
      * terisi) — jasa tidak punya HPP, bukan nilai yang belum diisi.
      *
-     * `serial_numbers` (R3) TIDAK divalidasi wajib saat finalisasi — T3.7
-     * menetapkan validasi serial hanya pada sisi "naik"/perpindahan; sisi
-     * konsumsi (penjualan keluar) boleh mencatat serial yang terjual untuk
-     * ketertelusuran opsional, tanpa mewajibkannya.
+     * `serial_numbers` (R3) — saat migration ini dibuat (T4.1), T3.7
+     * menetapkan validasi serial hanya pada sisi "naik"/perpindahan dan
+     * sengaja membiarkan sisi konsumsi (penjualan) tanpa validasi wajib.
+     * **Ditutup kemudian** (penutupan gap T4.9/UT5 terhadap
+     * `HS-TASKS-RIGHTCLICK-v1.1`): `FinalizeSaleAction::validateStructure()`
+     * kini memanggil `SerialNumberValidationService` yang sama untuk setiap
+     * baris `product_id` — produk `is_serialized` WAJIB mengisi serial number
+     * sejumlah `quantity` sebelum pembayaran dapat difinalisasi.
      */
     public function up(): void
     {

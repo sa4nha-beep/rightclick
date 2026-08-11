@@ -123,6 +123,97 @@ it('checkout menolak stok tidak cukup — pesan error tampil, keranjang TETAP ut
     $this->assertDatabaseMissing('sales', ['branch_id' => $this->branch->id]);
 });
 
+it('T4.9/UT5 — addProduct pada produk is_serialized TIDAK menggabung ke baris yang sudah ada', function () {
+    $product = Product::factory()->create(['selling_price' => '20000.00', 'is_serialized' => true]);
+
+    Livewire::test(PosTerminal::class)
+        ->call('addProduct', $product->id)
+        ->assertCount('cart', 1)
+        ->call('addProduct', $product->id)
+        ->assertCount('cart', 2)
+        ->assertSet('cart.0.quantity', '1')
+        ->assertSet('cart.1.quantity', '1');
+});
+
+it('T4.9/UT5 — checkout produk is_serialized tanpa serial number ditolak, keranjang tetap utuh', function () {
+    $product = Product::factory()->create(['selling_price' => '20000.00', 'is_serialized' => true]);
+    DB::transaction(fn () => app(StockLedgerService::class)->receive(
+        $this->branch, $product, '10.0000', '8000.00', now(), Branch::factory()->create(), StockMutationType::Receipt,
+    ));
+
+    $test = Livewire::test(PosTerminal::class)
+        ->call('openShift')
+        ->call('addProduct', $product->id)
+        ->set('payments.0.amount', '20000');
+
+    $test->call('checkout')
+        ->assertCount('cart', 1);
+
+    expect($test->get('checkoutError'))->not->toBeNull();
+    $this->assertDatabaseMissing('sales', ['branch_id' => $this->branch->id]);
+});
+
+it('T4.9/UT5 — checkout produk is_serialized dengan serial terisi berhasil, tersimpan di sale_items', function () {
+    $product = Product::factory()->create(['selling_price' => '20000.00', 'is_serialized' => true]);
+    DB::transaction(fn () => app(StockLedgerService::class)->receive(
+        $this->branch, $product, '10.0000', '8000.00', now(), Branch::factory()->create(), StockMutationType::Receipt,
+    ));
+
+    $test = Livewire::test(PosTerminal::class)
+        ->call('openShift')
+        ->call('addProduct', $product->id)
+        ->set('cart.0.serial_numbers_input', "SN-100\nSN-101")
+        ->set('cart.0.quantity', '2')
+        ->set('payments.0.amount', '40000');
+
+    $test->call('checkout')
+        ->assertSet('checkoutError', null)
+        ->assertCount('cart', 0);
+
+    $sale = Sale::query()->latest('created_at')->first();
+    expect($sale->state)->toBe(DocumentState::Final);
+    expect($sale->items->first()->serial_numbers)->toEqual(['SN-100', 'SN-101']);
+});
+
+it('T4.5/UT1 — clearCart (pintasan F4) mengosongkan keranjang tanpa mereset partner/diskon', function () {
+    $product = Product::factory()->create(['selling_price' => '20000.00']);
+
+    Livewire::test(PosTerminal::class)
+        ->call('addProduct', $product->id)
+        ->set('discountAmount', '5000')
+        ->assertCount('cart', 1)
+        ->call('clearCart')
+        ->assertCount('cart', 0)
+        ->assertSet('discountAmount', '5000');
+});
+
+it('T4.5/UT1 — addFirstMatch (pintasan Enter di pencarian) menambah hasil produk pertama', function () {
+    $product = Product::factory()->create(['name' => 'Mouse Wireless', 'selling_price' => '75000.00']);
+
+    Livewire::test(PosTerminal::class)
+        ->set('search', 'Mouse')
+        ->call('addFirstMatch')
+        ->assertCount('cart', 1)
+        ->assertSet('cart.0.id', (string) $product->id);
+});
+
+it('T4.5/UT1 — addFirstMatch jatuh ke jasa bila tidak ada produk yang cocok', function () {
+    $service = Service::factory()->create(['name' => 'Instalasi OS', 'price' => '100000.00']);
+
+    Livewire::test(PosTerminal::class)
+        ->set('search', 'Instalasi')
+        ->call('addFirstMatch')
+        ->assertCount('cart', 1)
+        ->assertSet('cart.0.id', (string) $service->id);
+});
+
+it('T4.5/UT1 — addFirstMatch tanpa hasil sama sekali tidak menambah apa pun', function () {
+    Livewire::test(PosTerminal::class)
+        ->set('search', 'Produk Yang Tidak Ada Sama Sekali Xyzzy')
+        ->call('addFirstMatch')
+        ->assertCount('cart', 0);
+});
+
 it('checkout dengan diskon melebihi TH1 — draft menunggu approval, stok belum berkurang', function () {
     $service = Service::factory()->create(['price' => '500000.00']);
 
