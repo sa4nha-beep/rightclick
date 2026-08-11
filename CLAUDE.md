@@ -402,6 +402,30 @@ Detail lengkap: `HS-PERM-RIGHTCLICK-v1.1` (58 permission, matriks lengkap).
 
 **Fase 3 (Inventory Core) SELESAI** — T3.1–T3.8 lengkap. Fase berikutnya: **Fase 4 — Sales & POS** (penjualan retail, multi-payment, DP, diskon, retur, shift kasir, cetak nota, operasi offline). PT1/PT2/PT5/PT7/PT13/PT14 (deferred sejak T1.13 ke Fase 4) masih menunggu modul Sales dibangun.
 
+### Pasca-Fase 5 (jauh setelahnya) — T3.11: uji beban StockLedgerService
+
+Dikonfirmasi pengguna (AskUserQuestion) sebelum implementasi — §13 hanya punya satu baris spesifikasi ("20.000 SKU, 500.000 mutasi, pada i3-7100"), tidak pernah punya definisi task selengkap T3.1–T3.10. Cakupan disepakati SEMPIT: throughput `StockLedgerService::receive()`/`consume()` saja (satu-satunya penulis `stock_mutations`, R1, bottleneck struktural di setiap alur finalisasi Sale/GoodsReceipt/StockAdjustment/dst.) — rebuild-balances, index Filament, dan query katalog POS TIDAK dicakup, sesuai pilihan eksplisit pengguna dari beberapa opsi yang ditawarkan.
+
+**Peringatan lingkungan (ditegakkan, bukan diabaikan):** dijalankan di container Docker dev di mesin pengembang, BUKAN hardware i3-7100 (§14) yang jadi target produksi sesungguhnya. Angka absolut di bawah **tidak boleh dipakai langsung untuk keputusan kapasitas produksi** — wajib diverifikasi ulang di hardware sungguhan sebelum go-live. Yang tetap bernilai: bukti bahwa arsitektur (locking pesimistis `FOR UPDATE`, single-writer, `bcmath` presisi) tidak runtuh pada volume ini, dan bottleneck relatif RECEIVE-vs-CONSUME.
+
+**Alat:** `php artisan stock:load-test` (`app/Console/Commands/StockLoadTestCommand.php`, baru, permanen — dapat dijalankan ulang di hardware sungguhan kapan pun) — `--skus`/`--mutations`/`--chunk`. Desain beban: N Product (bulk factory, DI LUAR pengukuran) → satu `receive()` batch besar per produk → sisa target diisi `consume()` kecil acak lintas produk (masing-masing menyentuh SATU batch — korektnas FIFO-crossing sudah teruji `StockLedgerServiceTest`, di sini murni throughput). Data uji dihapus otomatis setelah pengukuran selesai (branch berkode `LT*`/`LR*`, kategori "Uji Beban T3.11") — TIDAK dibiarkan mengotori database dev.
+
+**Hasil (20.000 SKU, 500.000 mutasi, Docker dev — bukan i3-7100):**
+
+| Fase | Operasi | avg | p50 | p95 | p99 | Total |
+|---|---|---|---|---|---|---|
+| Seed 20.000 Product | — | — | — | — | — | 63,00 detik |
+| RECEIVE | 20.000 | 4,52 ms | 4,31 ms | 5,96 ms | 7,18 ms | 90,49 detik |
+| CONSUME | 480.000 | 5,42 ms | 5,03 ms | 7,31 ms | 9,90 ms | 2.600,40 detik (≈43,3 menit) |
+
+Total durasi run: ≈45,9 menit. 500.000 baris `stock_mutations` terverifikasi tercipta (target tercapai persis). CONSUME sedikit lebih lambat dari RECEIVE (avg +0,90 ms) — masuk akal secara struktural: `consume()` melakukan `SELECT ... FOR UPDATE` atas `stock_batches` (kunci FIFO) SEBELUM menulis, sedangkan `receive()` langsung `INSERT` batch baru tanpa kunci baca terlebih dahulu. Tidak ada tanda degradasi non-linear seiring skala bertambah (p99 CONSUME di paruh akhir run tidak melonjak dibanding smoke test skala kecil) — locking pesimistis dan indeks FIFO (`received_at`/`created_at`/`id`) tetap `O(log n)` pada volume ini, bukan menjadi `O(n)`.
+
+**Dua bug ditemukan saat menyiapkan run penuh (bukan pada `StockLedgerService` itu sendiri):**
+1. `branches.code` dibatasi `varchar(10)` — kode awal (`LOADTEST-XXXXXX`, 16 karakter) melanggar constraint. Diperbaiki dengan pola `LT`/`LR` + 8 karakter acak.
+2. `ProductFactory`'s `sku` (`fake()->unique()->bothify('??####')`) — `Faker::unique()` hanya melacak keunikan DALAM SATU PROSES PHP, TIDAK memeriksa baris yang sudah ada di database dari eksekusi/proses SEBELUMNYA. Run percobaan pertama gagal `products_sku_unique` di tengah jalan karena bentrok dengan sisa data dari smoke test sebelumnya (proses artisan terpisah). Bukan bug `ProductFactory` yang perlu diperbaiki (perilaku itu benar untuk kebutuhan test suite biasa, yang selalu jalan di transaksi ter-rollback) — diselesaikan dengan membersihkan data sisa sebelum run penuh, dicatat di sini sebagai jebakan operasional bagi siapa pun yang menjalankan ulang `stock:load-test` berkali-kali di database yang sama tanpa `RefreshDatabase`.
+
+PHPStan level 6 bersih, Pint bersih (berlaku untuk `StockLoadTestCommand.php` — tidak ada Pest test khusus untuk perintah ini, mengikuti pola `RebuildStockBalancesCommand` yang juga tidak punya test, karena keduanya alat operasional/tooling, bukan business Action).
+
 ### Fase 4 — Sales & POS
 
 > **Peringatan penomoran (sama seperti Fase 2/3):** `HS-TASKS-RIGHTCLICK-v1.1`/`HS-DB-RIGHTCLICK-v1.0` tetap tidak ada di repositori. T4.1–T4.5 di bawah diturunkan sendiri dari §3/§11 dokumen ini. Dua breadcrumb informal dari sesi sebelumnya sempat menebak penomoran berbeda (komentar `MigrationMacros`: "T4.3 (sales)"; komentar `ApprovalService`: "diskon POS T4.8") — KEDUANYA tidak dipakai, breadcrumb tersebut ditandai sebagai tebakan lama, bukan sumber otoritatif, sama seperti kesalahan label yang dikoreksi di Fase 1. Kode prefix `DocumentType::CashierShift` → `SFT` dan `App\Domain\Sales\Enums\PaymentMethod` juga self-derived — direkonsiliasi bila dokumen asli tersedia.
@@ -502,11 +526,11 @@ Format Given/When/Then. Daftar lengkap di `HS-PRD-RIGHTCLICK-v1.0` bagian 10.
 
 | Kelompok | Cakupan | Sumber |
 |---|---|---|
-| **PT1–PT16** | Otorisasi negatif — memastikan yang tidak boleh benar-benar ditolak. T1.13: 7/16 diuji generik (`tests/Feature/AuthorizationScenariosTest.php`), 9 ditunda ke fase modulnya | `HS-PERM-RIGHTCLICK-v1.2` |
+| **PT1–PT16** | Otorisasi negatif — memastikan yang tidak boleh benar-benar ditolak. **Seluruh 16 skenario tertutup**: T1.13 (PT3/4/6/8/9/10/11, generik), T3.5 (PT15), T5.9 (PT1/2/5/7/13/14, peran nyata), pasca-Fase 5 (PT12/16) — lihat `tests/Feature/AuthorizationScenariosTest.php` | `HS-PERM-RIGHTCLICK-v1.2` |
 | **UT1–UT20** | Antarmuka — offline, printer, kontras, font lokal, pintasan | `HS-UI-RIGHTCLICK-v1.1` |
 | **T1–T12** | Sinkronisasi — idempotensi, deferred, offline 72 jam, duplikat partner | `HS-API-RIGHTCLICK-v1.0` |
 | Architecture test | Model tanpa Policy; penulis `stock_mutations` selain `StockLedgerService` | `HS-TASKS-RIGHTCLICK-v1.0` |
-| Uji beban | 20.000 SKU, 500.000 mutasi, pada i3-7100 | T3.11 |
+| Uji beban | ✅ Selesai — 20.000 SKU, 500.000 mutasi (Docker dev, bukan i3-hardware — lihat catatan detail di §11 pasca-Fase 3) | T3.11 |
 
 **Setiap acceptance criterion harus terpetakan ke minimal satu test.**
 
