@@ -29,6 +29,28 @@ afterEach(function () {
     DB::rollBack();
 });
 
+/**
+ * Bug nyata ditemukan lewat log produksi: `routes/web.php` memakai
+ * middleware `auth` bawaan Laravel untuk `/pos`, yang secara default
+ * me-redirect tamu ke `route('login')` — TIDAK ADA route bernama itu
+ * di aplikasi ini (login hanya ada di `/admin/login` lewat Filament,
+ * `filament.admin.auth.login`). Sebelum diperbaiki, ini melempar
+ * `RouteNotFoundException` (500 mentah) alih-alih redirect. HTTP GET
+ * ASLI (bukan Livewire::test(), yang tidak pernah melewati routing/guard
+ * tamu sama sekali) — satu-satunya cara membuktikan perilaku ini.
+ * Diperbaiki lewat `redirectGuestsTo()` di `bootstrap/app.php`.
+ */
+it('redirect ke login (bukan 500) saat mengakses /pos tanpa sesi', function () {
+    // beforeEach file ini login user secara default — dibalik eksplisit di
+    // sini karena test ini justru menguji kondisi TANPA sesi sama sekali.
+    auth()->logout();
+    $this->app['session']->flush();
+
+    $response = $this->get('/pos');
+
+    $response->assertRedirect(route('filament.admin.auth.login'));
+});
+
 it('menolak akses tanpa permission create_sale', function () {
     $this->actingAs(makeTestUser());
 

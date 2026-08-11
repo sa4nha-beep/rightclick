@@ -562,6 +562,24 @@ Signifikan secara spesifik untuk nota: `HS-TASKS-RIGHTCLICK-v1.1` asli (T4.11, U
 
 Full test suite 609 pass (+1), PHPStan level 6 bersih, Pint bersih, `composer audit` bersih.
 
+### Akar sesungguhnya "kebanyakan fitur belum bisa dipakai" — bukan tampilan, dua bug fungsional di infrastruktur bersama
+
+User tetap melaporkan sebagian besar fitur tidak bisa dipakai setelah kedua fix branding di atas — pertanyaannya "lanjut fase berikutnya atau uji manual satu-per-satu?". Alih-alih menjawab dari asumsi atau menebak lewat klik manual (sandbox ini tidak pernah bisa memuat browser ke container), `storage/logs/laravel.log` DIBACA LANGSUNG — bukti permintaan HTTP/Livewire SUNGGUHAN yang selama ini tidak pernah jadi sinyal (satu-satunya sinyal sepanjang proyek ini adalah test suite, dan `Livewire::test()` — dipakai HAMPIR SELURUH test Resource sejak Fase 2 — diam-diam melewati SELURUH middleware, gotcha yang sudah dicatat berulang T1.13/T5.6 tapi baru sekarang ketahuan skala dampaknya). Ditemukan **dua bug nyata**, keduanya di infrastruktur BERSAMA (bukan per-Resource), cukup untuk menjelaskan "kebanyakan fitur" tanpa perlu menebak lebih jauh:
+
+**1. `/pos` crash 500 untuk siapa pun tanpa sesi aktif, bukan redirect ke login.** `routes/web.php` memakai middleware `auth` BAWAAN Laravel untuk grup route `/pos`, yang secara default me-redirect tamu ke `route('login')` — TIDAK ADA route bernama itu di aplikasi ini (login hanya ada di `/admin/login` lewat Filament, terdaftar `filament.admin.auth.login`). Log: `Route [login] not defined. (RouteNotFoundException)`. Setiap kali sesi kedaluwarsa, tab lama dibuka, atau browser baru mengakses `/pos` — halaman 500 mentah, bukan prompt login. Diperbaiki: `bootstrap/app.php` — `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`, mekanisme resmi Laravel 12 untuk kasus ini.
+
+**2. JAUH LEBIH BESAR — `POST /livewire/update` (endpoint TUNGGAL untuk SETIAP interaksi Livewire setelah page load awal — tombol "Create"/"Save" pada SELURUH Resource Filament DAN checkout POS) didaftarkan Livewire SENDIRI hanya dengan middleware `web`, SAMA SEKALI DI LUAR route group panel Filament (`AdminPanelProvider::authMiddleware()`) maupun grup `/pos`.** `SetActiveBranchContext` (T2.8) — satu-satunya sumber `BranchContext` yang dibaca `BelongsToBranch::creating()` — TIDAK PERNAH berjalan pada request yang benar-benar menyimpan data, HANYA pada page load awal. Log (jalur Filament SUNGGUHAN, `CreateRecord->handleRecordCreation`, BUKAN test): `SQLSTATE[23502]: null value in column "branch_id" of relation "purchase_orders"`.
+
+Dikonfirmasi lewat `grep` TIDAK SATU PUN Resource mengisi `branch_id` secara eksplisit di form — SELURUHNYA mengandalkan hook model. Karena mekanismenya identik untuk SEMUA model branch-scoped, bug ini SISTEMIK, bukan spesifik `PurchaseOrder` — **Sale, StockAdjustment, StockOpname, StockTransfer, CashierShift, GoodsReceipt, PurchaseInvoice** sama-sama rentan; log hanya menangkap yang sempat dicoba user. Ini kemungkinan besar akar SEBENARNYA dari "kebanyakan fitur tidak bisa dipakai" — bukan satu-dua Resource yang salah, tapi SETIAP tombol "Buat"/"Simpan" pada dokumen branch-scoped di seluruh back office.
+
+Diperbaiki: `AppServiceProvider::boot()` — `Livewire::setUpdateRoute()` (API resmi Livewire untuk kasus persis ini), mendaftar ulang route dengan `SetActiveBranchContext` ditambahkan. SENGAJA TIDAK menambah `auth` di situ — endpoint yang sama juga melayani form login Filament sendiri (Livewire), yang wajib bisa diakses tanpa autentikasi; `SetActiveBranchContext` sendiri sudah aman tanpa pengguna login (no-op).
+
+**Verifikasi ketat, bukan sekadar "test hijau":** karena `Livewire::test()` TIDAK AKAN PERNAH menangkap bug jenis ini (ia melewati middleware sama sekali), regresi baru ditulis memakai HTTP request ASLI (`$this->post('/livewire/update', [])`, `$this->get('/pos')`). Sanity check eksplisit dilakukan: fix DIMATIKAN sementara, test regresi baru dikonfirmasi GAGAL (`null` bukan branch_id sungguhan) — baru kemudian fix dikembalikan dan test dikonfirmasi lulus. Membuktikan test benar-benar menguji kondisi bug, bukan false positive.
+
+**Ditemukan sekaligus, di luar cakupan (tooling, bukan UI):** `StockLoadTestCommand.php:188` melempar `Undefined constant StockMutationType::SaleConsumption` saat load-test dijalankan ulang — bertentangan dengan klaim "hasil terverifikasi" di catatan T3.11 pasca-Fase 3. Perintah artisan ini tidak menyentuh jalur UI mana pun (dijalankan manual, bukan dipicu pengguna) — dicatat sebagai temuan, TIDAK diperbaiki di sesi ini (di luar cakupan "fitur tidak bisa dipakai" yang dilaporkan user).
+
+Full test suite 611 pass (+2), PHPStan level 6 bersih, Pint bersih, `composer audit` bersih.
+
 ---
 
 ## 12. Acceptance Criteria — Kunci

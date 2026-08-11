@@ -99,3 +99,25 @@ it('bekerja tanpa sesi sama sekali — jatuh ke default_branch_id', function () 
 
     expect(app(BranchContext::class)->current())->toBe($branch->id);
 });
+
+/**
+ * Bug nyata ditemukan lewat log produksi (BUKAN test — Livewire::test()
+ * diam-diam melewati SELURUH middleware, satu-satunya alasan gap ini
+ * lolos tanpa terdeteksi sepanjang proyek ini): `POST /livewire/update`
+ * — endpoint TUNGGAL yang menangani SETIAP interaksi Livewire setelah
+ * page load awal (tombol "Create"/"Save" pada SEMUA Resource Filament +
+ * checkout POS) — didaftarkan Livewire SENDIRI, di luar route group
+ * panel Filament maupun `/pos`. Test di bawah memakai HTTP POST ASLI ke
+ * route itu (bukan `Livewire::test()`) — payload tidak perlu valid,
+ * middleware berjalan SEBELUM handler Livewire memproses body, cukup
+ * membuktikan middleware benar-benar terpanggil pada route sungguhan.
+ * Diperbaiki `AppServiceProvider::boot()` via `Livewire::setUpdateRoute()`.
+ */
+it('SetActiveBranchContext benar-benar berjalan pada route /livewire/update sungguhan, bukan hanya page load', function () {
+    $branch = makeTestBranch();
+    $user = User::factory()->create(['default_branch_id' => $branch->id]);
+
+    $this->actingAs($user)->post('/livewire/update', []);
+
+    expect(app(BranchContext::class)->current())->toBe($branch->id);
+});
