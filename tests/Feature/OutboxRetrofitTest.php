@@ -245,14 +245,24 @@ it('goods_receipt.finalized/.voided dan purchase_invoice.finalized/.voided serta
         'partner_id' => $supplier->id,
     ]);
     $finalizedInvoice = app(FinalizePurchaseInvoiceAction::class)->execute($invoice);
-    expect(outboxEventFor($finalizedInvoice->getMorphClass(), $finalizedInvoice->id)->event_type)->toBe('purchase_invoice.finalized');
+    $invoiceEvent = outboxEventFor($finalizedInvoice->getMorphClass(), $finalizedInvoice->id);
+    // FR-M11a-05: baris Payable (HasOne, dibungkus array oleh SyncEventApplier::upsertChildren())
+    // ikut terlampir di event finalisasi faktur, bukan event terpisah.
+    expect($invoiceEvent->event_type)->toBe('purchase_invoice.finalized')
+        ->and($invoiceEvent->payload['payable']['original_amount'])->toEqual('50000.00');
 
-    $payment = app(RecordPurchasePaymentAction::class)->execute($finalizedInvoice, ['method' => 'cash', 'amount' => '20000.00']);
+    $payment = app(RecordPurchasePaymentAction::class)->execute(
+        [['payable_id' => (string) $finalizedInvoice->payable->id, 'amount' => '20000.00']],
+        'cash',
+        '20000.00',
+    );
     $paymentEvent = outboxEventFor($payment->getMorphClass(), $payment->id);
     expect($paymentEvent->event_type)->toBe('purchase_payment.recorded')
-        // CashEntry merujuk PurchaseInvoice, bukan PurchasePayment (aggregate
-        // event ini) — auto-attach OutboxService tidak menemukannya sendiri,
-        // dilampirkan manual lewat $extra (lihat RecordPurchasePaymentAction).
+        ->and($paymentEvent->payload['allocations'])->toHaveCount(1)
+        // CashEntry KINI merujuk PurchasePayment (aggregate event ini) —
+        // BEDA dari desain lama yang merujuk PurchaseInvoice dan perlu $extra
+        // manual; sekarang auto-attach OutboxService (cari berdasar $document)
+        // menemukannya sendiri (lihat RecordPurchasePaymentAction).
         ->and($paymentEvent->payload['cash_entries'])->toHaveCount(1)
         ->and($paymentEvent->payload['cash_entries'][0]['amount'])->toEqual('-20000.00');
 
@@ -275,7 +285,7 @@ it('goods_receipt.finalized/.voided dan purchase_invoice.finalized/.voided serta
     expect(outboxEventFor($finalizedSecondGr->getMorphClass(), $finalizedSecondGr->id)->event_type)->toBe('goods_receipt.voided');
 });
 
-it('receivable_payment.recorded tercatat di outbox', function () {
+it('sale.finalized melampirkan baris Receivable, dan receivable_payment.recorded tercatat di outbox', function () {
     DB::transaction(fn () => app(StockLedgerService::class)->receive(
         $this->branch, $this->product, '10.0000', '10000.00', now(), Branch::factory()->create(), StockMutationType::Receipt,
     ));
@@ -287,7 +297,22 @@ it('receivable_payment.recorded tercatat di outbox', function () {
     $sale->payments()->create(['method' => 'cash', 'amount' => '10000.00']);
     $finalizedSale = app(FinalizeSaleAction::class)->execute($sale);
 
-    $collection = app(RecordReceivablePaymentAction::class)->execute($finalizedSale, ['method' => 'cash', 'amount' => '5000.00']);
+    // FR-M11a-05: baris Receivable (HasOne) ikut terlampir di sale.finalized.
+    $saleEvent = outboxEventFor($finalizedSale->getMorphClass(), $finalizedSale->id);
+    expect($saleEvent->payload['receivable']['original_amount'])->toEqual('20000.00');
 
-    expect(outboxEventFor($collection->getMorphClass(), $collection->id)->event_type)->toBe('receivable_payment.recorded');
+    $collection = app(RecordReceivablePaymentAction::class)->execute(
+        [['receivable_id' => (string) $finalizedSale->receivable->id, 'amount' => '5000.00']],
+        'cash',
+        '5000.00',
+    );
+
+    $collectionEvent = outboxEventFor($collection->getMorphClass(), $collection->id);
+    expect($collectionEvent->event_type)->toBe('receivable_payment.recorded')
+        ->and($collectionEvent->payload['allocations'])->toHaveCount(1)
+        // CashEntry KINI merujuk ReceivablePayment (aggregate event ini) —
+        // auto-attach OutboxService menemukannya sendiri (lihat
+        // RecordReceivablePaymentAction).
+        ->and($collectionEvent->payload['cash_entries'])->toHaveCount(1)
+        ->and($collectionEvent->payload['cash_entries'][0]['amount'])->toEqual('5000.00');
 });

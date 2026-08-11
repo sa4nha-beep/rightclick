@@ -17,12 +17,17 @@ use Illuminate\Support\Facades\DB;
  * (mis. nomor faktur salah input) tanpa memengaruhi stok yang sudah
  * diterima.
  *
- * Ditolak bila sudah ada `purchase_payments` tercatat (T5.3) — pembayaran
- * bersifat immutable tanpa mekanisme koreksi individual (lihat catatan
- * migration `purchase_payments`), jadi membatalkan faktur yang sudah
- * menerima cicilan akan meninggalkan pembayaran yang tidak jelas
- * dasarnya. Pola sama `VoidGoodsReceiptAction` (ditolak selama ada faktur
- * aktif) diterapkan satu langkah lebih jauh ke rantai dokumen.
+ * Ditolak bila `Payable` terkait sudah punya `paid_amount > 0` — pembayaran
+ * bersifat immutable tanpa mekanisme koreksi individual, jadi membatalkan
+ * faktur yang sudah menerima cicilan akan meninggalkan pembayaran yang
+ * tidak jelas dasarnya. Pola sama `VoidGoodsReceiptAction` (ditolak selama
+ * ada faktur aktif) diterapkan satu langkah lebih jauh ke rantai dokumen.
+ * Setelah guard lolos, baris `Payable` ikut di-soft-delete (penutup gap
+ * FR-M11a-05).
+ *
+ * `Payable` yang baru di-soft-delete DILAMPIRKAN LEWAT `$extra` — sama
+ * alasan `VoidSaleAction` (lihat docblocknya untuk detail bug
+ * `OutboxService::record()`/`refresh()`/`SoftDeletes` yang dihindari).
  *
  * `OutboxService` (T5.7 retrofit, simpul kritis): `purchase_invoice.voided`.
  */
@@ -36,14 +41,20 @@ final class VoidPurchaseInvoiceAction
     public function execute(PurchaseInvoice $purchaseInvoice, string $reason): PurchaseInvoice
     {
         return DB::transaction(function () use ($purchaseInvoice, $reason) {
-            if ($purchaseInvoice->payments()->exists()) {
+            $payable = $purchaseInvoice->payable;
+
+            if ($payable !== null && bccomp((string) $payable->paid_amount, '0', 2) > 0) {
                 throw new PurchaseInvoiceValidationException(
                     'Faktur ini sudah menerima pembayaran — tidak dapat dibatalkan selama ada cicilan tercatat.',
                 );
             }
 
+            $payable?->delete();
+
             $this->documentStates->void($purchaseInvoice, $reason);
-            $this->outbox->record($purchaseInvoice->branch, $purchaseInvoice, 'purchase_invoice.voided');
+
+            $extra = $payable !== null ? ['payable' => $payable->attributesToArray()] : [];
+            $this->outbox->record($purchaseInvoice->branch, $purchaseInvoice, 'purchase_invoice.voided', extra: $extra);
 
             return $purchaseInvoice->fresh();
         });

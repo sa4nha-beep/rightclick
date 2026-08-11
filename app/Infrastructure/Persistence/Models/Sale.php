@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -24,14 +25,17 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * saat finalisasi (`FinalizeSaleAction`) — lihat catatan migration.
  *
  * `amount_paid`/`balance_due`/`payment_status` (T4.2, DP) juga dikunci saat
- * finalisasi — lihat catatan migration `add_payment_tracking_to_sales_table`
- * untuk alasan tidak ada tabel `receivables` terpisah di sini (Fase 5).
+ * finalisasi.
  *
  * `balance_due` (T4.2) adalah piutang AWAL saat sale ini difinalisasi —
- * TIDAK PERNAH diperbarui lagi (R4). Pelunasan BELAKANGAN dicatat di
- * `receivable_payments` (T5.5, pola persis `PurchasePayment`/T5.3); sisa
- * piutang KINI dihitung, bukan disimpan — lihat `amountCollected()`/
- * `remainingReceivable()`/`receivableStatus()`.
+ * TIDAK PERNAH diperbarui lagi (R4). Bila `> 0`, `FinalizeSaleAction`
+ * membuat satu baris `Receivable` (penutup gap `HS-DB-RIGHTCLICK-v1.0`
+ * §4.6/FR-M11a-05) yang melacak sisa piutang KINI — diperbarui
+ * `RecordReceivablePaymentAction` setiap alokasi pembayaran baru. Satu
+ * peristiwa pembayaran (`ReceivablePayment`) bisa dialokasikan ke BANYAK
+ * Sale sekaligus, bukan lagi terikat satu-ke-satu (T5.5 lama). Lihat
+ * `amountCollected()`/`remainingReceivable()`/`receivableStatus()` yang
+ * mendelegasikan ke `receivable()`.
  *
  * @property string $branch_id
  * @property string $cashier_shift_id
@@ -44,6 +48,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $balance_due
  * @property PaymentStatus $payment_status
  * @property DocumentState $state
+ * @property-read Receivable|null $receivable
  */
 class Sale extends Model
 {
@@ -136,76 +141,63 @@ class Sale extends Model
     }
 
     /**
-     * @return HasMany<ReceivablePayment, $this>
+     * @return HasOne<Receivable, $this>
      */
-    public function receivablePayments(): HasMany
+    public function receivable(): HasOne
     {
-        return $this->hasMany(ReceivablePayment::class);
+        return $this->hasOne(Receivable::class);
     }
 
     /**
-     * Total piutang yang sudah dikumpulkan SETELAH finalisasi — SUM
-     * `receivable_payments.amount`, bukan kolom tersimpan (lihat docblock
-     * kelas).
+     * Total piutang yang sudah dikumpulkan SETELAH finalisasi — dibaca dari
+     * cache `Receivable::$paid_amount` (rebuild piutang, lihat docblock
+     * `Receivable`), bukan lagi `SUM(receivable_payments.amount)` langsung
+     * (kolom `receivable_payments.sale_id` sudah dihapus — satu peristiwa
+     * pembayaran kini bisa mencakup banyak Sale sekaligus, FR-M11a-05).
+     * Tanpa baris `Receivable` (balance_due lunas penuh saat finalisasi) —
+     * tidak ada yang perlu dikumpulkan lagi.
      */
     public function amountCollected(): string
     {
-        return (string) $this->receivablePayments()->sum('amount');
+        $receivable = $this->receivable;
+
+        return $receivable === null ? '0.00' : (string) $receivable->paid_amount;
     }
 
     /**
-     * Sisa piutang KINI — `balance_due` (piutang awal, dikunci saat
-     * finalisasi) dikurangi `amountCollected()`.
+     * Sisa piutang KINI — dibaca langsung dari cache `Receivable::$outstanding_amount`.
      */
     public function remainingReceivable(): string
     {
-        return bcsub((string) $this->balance_due, $this->amountCollected(), 2);
+        $receivable = $this->receivable;
+
+        return $receivable === null ? '0.00' : (string) $receivable->outstanding_amount;
     }
 
     /**
      * Status piutang KINI — BEDA dari `payment_status` tersimpan (T4.2,
      * status DP pada saat finalisasi, historis dan tidak pernah berubah).
-     * Method ini menghitung ulang dari `remainingReceivable()`.
+     * Dibaca dari cache `Receivable::$payment_status`; tanpa baris
+     * `Receivable` berarti lunas penuh saat finalisasi.
      */
     public function receivableStatus(): PaymentStatus
     {
-        if (bccomp((string) $this->balance_due, '0', 2) <= 0) {
-            return PaymentStatus::Paid;
-        }
+        $receivable = $this->receivable;
 
-        $collected = $this->amountCollected();
-
-        if (bccomp($collected, '0', 2) <= 0) {
-            return PaymentStatus::Unpaid;
-        }
-
-        if (bccomp($collected, (string) $this->balance_due, 2) >= 0) {
-            return PaymentStatus::Paid;
-        }
-
-        return PaymentStatus::Partial;
+        return $receivable === null ? PaymentStatus::Paid : $receivable->payment_status;
     }
 
     /**
      * Saldo piutang total dari satu pelanggan di satu cabang — SUM
-     * `remainingReceivable()` atas seluruh penjualan FINAL (non-void) milik
-     * pelanggan tersebut. Dasar "saldo piutang per partner" (T5.5), pola
-     * persis `PurchaseInvoice::outstandingBalanceForPartner()` (T5.3).
+     * `receivables.outstanding_amount` langsung (SATU query, menggantikan
+     * loop N+1 per Sale pada implementasi lama). Dasar "saldo piutang per
+     * partner" (T5.5), pola persis `PurchaseInvoice::outstandingBalanceForPartner()`.
      */
     public static function outstandingReceivableForPartner(string $branchId, string $partnerId): string
     {
-        $sales = self::query()
+        return (string) Receivable::query()
             ->where('branch_id', $branchId)
             ->where('partner_id', $partnerId)
-            ->where('state', DocumentState::Final)
-            ->get();
-
-        $total = '0';
-
-        foreach ($sales as $sale) {
-            $total = bcadd($total, $sale->remainingReceivable(), 2);
-        }
-
-        return $total;
+            ->sum('outstanding_amount');
     }
 }

@@ -9,47 +9,25 @@ use App\Application\Services\OutboxService;
 use App\Domain\Finance\Enums\CashEntryType;
 use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
 use App\Domain\Sales\Enums\PaymentMethod;
-use App\Domain\Shared\Enums\DocumentState;
-use App\Infrastructure\Persistence\Models\PurchaseInvoice;
+use App\Domain\Sales\Enums\PaymentStatus;
+use App\Infrastructure\Persistence\Models\Payable;
 use App\Infrastructure\Persistence\Models\PurchasePayment;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Catat satu cicilan/pembayaran hutang (T5.3) atas `PurchaseInvoice` yang
- * SUDAH final. BEDA dari pola `FinalizeXAction` lain — tidak menyentuh
- * `DocumentStateService` sama sekali, karena `PurchaseInvoice` induk sudah
- * final dan TETAP final (R4); dokumen ini hanya menambah baris anak baru.
+ * Sisi AP dari `RecordReceivablePaymentAction` — treatment simetris penuh
+ * (lihat docblocknya untuk alasan desain lengkap). Menutup gap FR-M11a-05:
+ * satu peristiwa pembayaran bisa dialokasikan ke BANYAK `Payable` (faktur)
+ * sekaligus, bukan lagi satu-ke-satu (`purchase_payments.purchase_invoice_id`
+ * lama).
  *
  * `PaymentMethod` dipakai ulang langsung dari `App\Domain\Sales\Enums` —
- * BUKAN diduplikasi ke `Domain\Procurement`. Secara konsep enum ini sudah
- * tidak spesifik-Sales sejak dipakai di sini (bentuk pembayaran yang sama
- * berlaku dua arah, uang masuk maupun keluar); idealnya dipromosikan ke
- * `Domain\Shared` saat ada kesempatan pembersihan lintas modul — TIDAK
- * dilakukan di sini karena akan menyentuh ~10 berkas Sales yang tidak
- * terkait cakupan T5.3 (SalePayment/FinalizeSaleAction/CloseCashierShiftAction/
- * Filament SaleResource/tests), risiko regresi tidak sepadan dengan
- * manfaat murni-kerapian untuk task ini. Ditandai eksplisit untuk
- * direkonsiliasi bersama pembersihan Domain lainnya.
+ * BUKAN diduplikasi ke `Domain\Procurement` (catatan promosi ke
+ * `Domain\Shared` tetap berlaku, lihat riwayat T5.3).
  *
- * `CashLedgerService` (T5.4 retrofit): `method='cash'` menerbitkan satu
- * `CashEntry` kas KELUAR yang merujuk `PurchaseInvoice` ini (BUKAN baris
- * `PurchasePayment` individual — pola sama `FinalizeSaleAction`, entri kas
- * selalu menunjuk dokumen induk). Pembayaran non-tunai TIDAK menyentuh kas
- * fisik, jadi TIDAK menulis `CashEntry` sama sekali.
- *
- * `OutboxService` (T5.7 retrofit, simpul kritis): `purchase_payment.recorded`
- * — BEDA dari event finalize/void lain, aggregate-nya adalah baris
- * `PurchasePayment` yang BARU dibuat, BUKAN `PurchaseInvoice` induk. Faktur
- * sudah punya event sendiri (`purchase_invoice.finalized`) diterbitkan di
- * transaksi TERPISAH saat faktur ITU sendiri difinalisasi — pembayaran ini
- * terjadi BELAKANGAN, di transaksi lain, jadi butuh event sendiri agar
- * tidak pernah hilang tanpa jejak ke HQ.
- *
- * Payload (T5.8): `CashEntry` yang tercipta (bila tunai) merujuk
- * `PurchaseInvoice`, BUKAN `PurchasePayment` (lihat catatan
- * `CashLedgerService` di atas) — auto-attach `OutboxService` (yang mencari
- * berdasar aggregate event, `$purchasePayment`) TIDAK akan menemukannya,
- * jadi dilampirkan manual lewat parameter `$extra`.
+ * `CashLedgerService`: `method='cash'` menerbitkan `CashEntry` kas KELUAR
+ * (amount negatif) yang merujuk `PurchasePayment` (header) — bukan lagi
+ * `PurchaseInvoice`, sama alasan sisi AR.
  */
 final class RecordPurchasePaymentAction
 {
@@ -59,65 +37,120 @@ final class RecordPurchasePaymentAction
     ) {}
 
     /**
-     * @param  array{method: string, amount: string, reference_no?: string|null}  $payment
+     * @param  array<int, array{payable_id: string, amount: string}>  $allocations
      */
-    public function execute(PurchaseInvoice $purchaseInvoice, array $payment): PurchasePayment
+    public function execute(array $allocations, string $method, string $totalAmount, ?string $referenceNo = null): PurchasePayment
     {
-        return DB::transaction(function () use ($purchaseInvoice, $payment) {
-            $invoice = PurchaseInvoice::query()
-                ->whereKey($purchaseInvoice->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $invoice->loadMissing('branch');
-
-            if ($invoice->state !== DocumentState::Final) {
-                throw new PurchaseInvoiceValidationException(
-                    'Hanya faktur berstatus final yang dapat menerima pembayaran.',
-                );
+        return DB::transaction(function () use ($allocations, $method, $totalAmount, $referenceNo) {
+            if ($allocations === []) {
+                throw new PurchaseInvoiceValidationException('Alokasi pembayaran wajib diisi minimal satu baris.');
             }
 
-            $amount = (string) $payment['amount'];
-
-            if (bccomp($amount, '0', 2) <= 0) {
+            if (bccomp($totalAmount, '0', 2) <= 0) {
                 throw new PurchaseInvoiceValidationException('Jumlah pembayaran harus lebih besar dari nol.');
             }
 
-            $projectedPaid = bcadd($invoice->amountPaid(), $amount, 2);
+            $sumAllocations = '0';
+            foreach ($allocations as $allocation) {
+                $sumAllocations = bcadd($sumAllocations, (string) $allocation['amount'], 2);
+            }
 
-            if (bccomp($projectedPaid, (string) $invoice->total_amount, 2) > 0) {
+            if (bccomp($sumAllocations, $totalAmount, 2) !== 0) {
                 throw new PurchaseInvoiceValidationException(sprintf(
-                    'Pembayaran Rp%s melebihi sisa hutang Rp%s pada faktur ini.',
-                    $amount,
-                    $invoice->balanceDue(),
+                    'Total alokasi Rp%s tidak sama dengan jumlah pembayaran Rp%s.',
+                    $sumAllocations,
+                    $totalAmount,
                 ));
             }
 
-            $method = PaymentMethod::from($payment['method']);
+            $paymentMethod = PaymentMethod::from($method);
 
-            $purchasePayment = $invoice->payments()->create([
-                'method' => $method->value,
-                'amount' => $amount,
-                'reference_no' => $payment['reference_no'] ?? null,
-            ]);
+            $lockedAllocations = [];
+            $partnerId = null;
+            $branch = null;
 
-            $extra = [];
+            foreach ($allocations as $allocation) {
+                $amount = (string) $allocation['amount'];
 
-            if ($method === PaymentMethod::Cash) {
-                $cashEntry = $this->cashLedger->record(
-                    $invoice->branch,
-                    bcmul($amount, '-1', 2),
-                    CashEntryType::PurchasePayment,
-                    now(),
-                    $invoice,
-                );
+                if (bccomp($amount, '0', 2) <= 0) {
+                    throw new PurchaseInvoiceValidationException('Jumlah alokasi per faktur harus lebih besar dari nol.');
+                }
 
-                $extra['cash_entries'] = [$cashEntry->attributesToArray()];
+                $payable = Payable::query()
+                    ->whereKey((string) $allocation['payable_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($payable === null) {
+                    throw new PurchaseInvoiceValidationException('Tagihan hutang tidak ditemukan atau sudah tidak berlaku.');
+                }
+
+                if ($partnerId === null) {
+                    $partnerId = $payable->partner_id;
+                    $branch = $payable->loadMissing('branch')->branch;
+                } elseif ($payable->partner_id !== $partnerId) {
+                    throw new PurchaseInvoiceValidationException('Seluruh alokasi dalam satu pembayaran wajib berasal dari partner yang sama.');
+                }
+
+                if (bccomp($amount, (string) $payable->outstanding_amount, 2) > 0) {
+                    throw new PurchaseInvoiceValidationException(sprintf(
+                        'Alokasi Rp%s melebihi sisa hutang Rp%s pada faktur ini.',
+                        $amount,
+                        $payable->outstanding_amount,
+                    ));
+                }
+
+                $lockedAllocations[] = ['payable' => $payable, 'amount' => $amount];
             }
 
-            $this->outbox->record($invoice->branch, $purchasePayment, 'purchase_payment.recorded', extra: $extra);
+            $purchasePayment = PurchasePayment::create([
+                'method' => $paymentMethod->value,
+                'amount' => $totalAmount,
+                'reference_no' => $referenceNo,
+            ]);
 
-            return $purchasePayment;
+            foreach ($lockedAllocations as $entry) {
+                /** @var Payable $payable */
+                $payable = $entry['payable'];
+                $amount = $entry['amount'];
+
+                $payable->paid_amount = bcadd((string) $payable->paid_amount, $amount, 2);
+                $payable->outstanding_amount = bcsub((string) $payable->original_amount, (string) $payable->paid_amount, 2);
+                $payable->payment_status = $this->resolveStatus($payable);
+                $payable->save();
+
+                $purchasePayment->allocations()->create([
+                    'payable_id' => $payable->id,
+                    'amount' => $amount,
+                ]);
+            }
+
+            if ($paymentMethod === PaymentMethod::Cash) {
+                $this->cashLedger->record(
+                    $branch,
+                    bcmul($totalAmount, '-1', 2),
+                    CashEntryType::PurchasePayment,
+                    now(),
+                    $purchasePayment,
+                );
+            }
+
+            $this->outbox->record($branch, $purchasePayment, 'purchase_payment.recorded', ['allocations']);
+
+            return $purchasePayment->fresh(['allocations']);
         });
+    }
+
+    private function resolveStatus(Payable $payable): PaymentStatus
+    {
+        if (bccomp((string) $payable->paid_amount, '0', 2) <= 0) {
+            return PaymentStatus::Unpaid;
+        }
+
+        if (bccomp((string) $payable->paid_amount, (string) $payable->original_amount, 2) >= 0) {
+            return PaymentStatus::Paid;
+        }
+
+        return PaymentStatus::Partial;
     }
 }

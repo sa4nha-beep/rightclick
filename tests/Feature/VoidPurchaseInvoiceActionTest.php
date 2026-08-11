@@ -12,6 +12,7 @@ use App\Domain\Shared\Exceptions\DocumentStateException;
 use App\Infrastructure\Persistence\Models\Branch;
 use App\Infrastructure\Persistence\Models\GoodsReceipt;
 use App\Infrastructure\Persistence\Models\Partner;
+use App\Infrastructure\Persistence\Models\Payable;
 use App\Infrastructure\Persistence\Models\Product;
 use App\Infrastructure\Persistence\Models\PurchaseInvoice;
 use Illuminate\Support\Facades\DB;
@@ -43,11 +44,17 @@ it('void mengubah faktur final menjadi void tanpa menyentuh stok', function () {
     ]);
     $finalizedInvoice = $this->finalizeInvoice->execute($invoice);
 
+    $payableId = $finalizedInvoice->payable->id;
+
     $voided = $this->voidAction->execute($finalizedInvoice, 'Salah nomor faktur');
 
     expect($voided->state)->toBe(DocumentState::Void)
         ->and($voided->void_reason)->toBe('Salah nomor faktur')
         ->and($finalizedGr->fresh()->state)->toBe(DocumentState::Final);
+
+    // FR-M11a-05: Payable ikut di-soft-delete — tidak ada lagi yang perlu dibayar.
+    expect($voided->fresh()->payable)->toBeNull()
+        ->and(Payable::withTrashed()->find($payableId)->trashed())->toBeTrue();
 });
 
 it('menolak void tanpa alasan', function () {
@@ -78,7 +85,11 @@ it('T5.3 — menolak void bila faktur sudah menerima pembayaran', function () {
     ]);
     $finalizedInvoice = $this->finalizeInvoice->execute($invoice);
 
-    app(RecordPurchasePaymentAction::class)->execute($finalizedInvoice, ['method' => 'cash', 'amount' => '10000.00']);
+    app(RecordPurchasePaymentAction::class)->execute(
+        [['payable_id' => (string) $finalizedInvoice->payable->id, 'amount' => '10000.00']],
+        'cash',
+        '10000.00',
+    );
 
     expect(fn () => $this->voidAction->execute($finalizedInvoice->fresh(), 'Coba batalkan'))
         ->toThrow(PurchaseInvoiceValidationException::class);

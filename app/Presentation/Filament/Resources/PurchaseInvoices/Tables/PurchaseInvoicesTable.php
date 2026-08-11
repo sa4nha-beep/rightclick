@@ -138,8 +138,17 @@ class PurchaseInvoicesTable
                             ->maxLength(100),
                     ])
                     ->action(function (PurchaseInvoice $record, array $data) {
+                        // Aksi ini SELALU membentuk SATU alokasi (ke payable milik
+                        // faktur ini sendiri) — kapabilitas "satu pembayaran ke banyak
+                        // faktur" (FR-M11a-05) ada di level Action, layar UI khusus
+                        // untuk itu adalah task terpisah (lihat CLAUDE.md).
                         try {
-                            app(RecordPurchasePaymentAction::class)->execute($record, $data);
+                            app(RecordPurchasePaymentAction::class)->execute(
+                                [['payable_id' => (string) $record->payable?->id, 'amount' => (string) $data['amount']]],
+                                (string) $data['method'],
+                                (string) $data['amount'],
+                                $data['reference_no'] ?? null,
+                            );
                         } catch (PurchaseInvoiceValidationException $e) {
                             Notification::make()->title('Pembayaran ditolak')->body($e->getMessage())->danger()->send();
 

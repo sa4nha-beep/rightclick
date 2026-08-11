@@ -170,8 +170,17 @@ class SalesTable
                             ->maxLength(100),
                     ])
                     ->action(function (Sale $record, array $data) {
+                        // Aksi ini SELALU membentuk SATU alokasi (ke receivable milik
+                        // Sale ini sendiri) — kapabilitas "satu pembayaran ke banyak
+                        // tagihan" (FR-M11a-05) ada di level Action, layar UI khusus
+                        // untuk itu adalah task terpisah (lihat CLAUDE.md).
                         try {
-                            app(RecordReceivablePaymentAction::class)->execute($record, $data);
+                            app(RecordReceivablePaymentAction::class)->execute(
+                                [['receivable_id' => (string) $record->receivable?->id, 'amount' => (string) $data['amount']]],
+                                (string) $data['method'],
+                                (string) $data['amount'],
+                                $data['reference_no'] ?? null,
+                            );
                         } catch (SaleValidationException $e) {
                             Notification::make()->title('Pelunasan ditolak')->body($e->getMessage())->danger()->send();
 

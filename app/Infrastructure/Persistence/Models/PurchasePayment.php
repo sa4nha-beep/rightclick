@@ -9,20 +9,18 @@ use App\Infrastructure\Persistence\Concerns\HasUuidV7;
 use Database\Factories\Infrastructure\Persistence\Models\PurchasePaymentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Baris pembayaran hutang (T5.3). BEDA dari `SalePayment` — dokumen ini
- * BOLEH ditulis berkali-kali dari waktu ke waktu SETELAH `PurchaseInvoice`
- * induknya final (cicilan), lewat `RecordPurchasePaymentAction` secara
- * langsung, bukan sebagai byproduct finalisasi dokumen induk. Karena itu
- * `PurchasePaymentPolicy::create()` TIDAK selalu `false` seperti
- * `SalePaymentPolicy` — digerbang `record_cash_entry` sungguhan.
+ * Header peristiwa pembayaran hutang (T5.3, direstrukturisasi menutup gap
+ * FR-M11a-05 — treatment simetris penuh `ReceivablePayment`, lihat
+ * docblocknya untuk alasan desain lengkap). Kolom `purchase_invoice_id`
+ * dihapus — baris ini murni header, alokasi ke `Payable` lewat
+ * `allocations()`.
  *
  * Tanpa soft delete/`userStamps()` — immutable, tanpa mekanisme koreksi
  * individual di T5.3 (lihat catatan migration).
  *
- * @property string $purchase_invoice_id
  * @property PaymentMethod $method
  * @property string $amount
  * @property string|null $reference_no
@@ -35,7 +33,6 @@ class PurchasePayment extends Model
     use HasUuidV7;
 
     protected $fillable = [
-        'purchase_invoice_id',
         'method',
         'amount',
         'reference_no',
@@ -49,10 +46,10 @@ class PurchasePayment extends Model
     }
 
     /**
-     * @return BelongsTo<PurchaseInvoice, $this>
+     * @return HasMany<PurchasePaymentAllocation, $this>
      */
-    public function purchaseInvoice(): BelongsTo
+    public function allocations(): HasMany
     {
-        return $this->belongsTo(PurchaseInvoice::class);
+        return $this->hasMany(PurchasePaymentAllocation::class);
     }
 }

@@ -18,6 +18,7 @@ use App\Domain\Sales\Enums\PaymentStatus;
 use App\Domain\Sales\Exceptions\SaleValidationException;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Domain\Shared\Enums\DocumentType;
+use App\Infrastructure\Persistence\Models\Receivable;
 use App\Infrastructure\Persistence\Models\Sale;
 use App\Infrastructure\Persistence\Models\Setting;
 use Illuminate\Support\Facades\Auth;
@@ -38,12 +39,13 @@ use Illuminate\Support\Facades\DB;
  *
  * DP/piutang parsial (T4.2): pembayaran boleh KURANG dari `total_amount`
  * ASALKAN `partner_id` terisi (walk-in tanpa identitas tidak bisa punya
- * piutang — tidak ada yang bisa ditagih). Sisa dicatat di `balance_due`
- * pada dokumen ini sendiri — BUKAN tabel `receivables` terpisah (Fase 5,
- * lihat catatan migration `add_payment_tracking_to_sales_table`).
- * Pembayaran MELEBIHI total tetap ditolak (kembalian tunai adalah urusan
- * POS UI, T4.4, bukan `sale_payments` — lihat catatan migration
- * `sale_payments`).
+ * piutang — tidak ada yang bisa ditagih). `balance_due` pada dokumen ini
+ * TETAP terkunci sebagai piutang AWAL (R4) — bila `> 0`, satu baris
+ * `Receivable` dibuat (penutup gap `HS-DB-RIGHTCLICK-v1.0` §4.6/FR-M11a-05)
+ * untuk melacak sisa yang KINI belum tertagih, diperbarui
+ * `RecordReceivablePaymentAction` setiap alokasi pembayaran baru. Pembayaran
+ * MELEBIHI total tetap ditolak (kembalian tunai adalah urusan POS UI, T4.4,
+ * bukan `sale_payments` — lihat catatan migration `sale_payments`).
  *
  * COGS (`unit_cost_snapshot`) diisi dari HASIL NYATA FIFO
  * `StockLedgerService::consume()` (`Collection<StockConsumption>`) — bukan
@@ -137,6 +139,23 @@ final class FinalizeSaleAction
         $sale->document_number = $this->documentNumbers->next(DocumentType::Sale, $sale->branch);
         $sale->save();
 
+        // Penutup gap FR-M11a-05: baris Receivable HANYA dibuat bila masih
+        // ada sisa piutang — Sale yang lunas penuh saat finalisasi tidak
+        // punya apa pun untuk ditagih belakangan (bedakan dari `partner_id`
+        // null, sudah ditolak `resolvePaymentStatus()` di atas bila
+        // `balance_due > 0`, jadi `partner_id` di sini pasti terisi).
+        if (bccomp((string) $sale->balance_due, '0', 2) > 0) {
+            Receivable::create([
+                'branch_id' => $sale->branch_id,
+                'sale_id' => $sale->id,
+                'partner_id' => $sale->partner_id,
+                'original_amount' => $sale->balance_due,
+                'paid_amount' => '0.00',
+                'outstanding_amount' => $sale->balance_due,
+                'payment_status' => PaymentStatus::Unpaid,
+            ]);
+        }
+
         foreach ($sale->payments as $payment) {
             if ($payment->method !== PaymentMethod::Cash) {
                 continue;
@@ -175,7 +194,7 @@ final class FinalizeSaleAction
 
         $this->documentStates->finalize($sale);
 
-        $this->outbox->record($sale->branch, $sale, 'sale.finalized', ['items', 'payments']);
+        $this->outbox->record($sale->branch, $sale, 'sale.finalized', ['items', 'payments', 'receivable']);
 
         return $sale->fresh(['items', 'payments']);
     }

@@ -8,8 +8,10 @@ use App\Application\Services\DocumentNumberService;
 use App\Application\Services\DocumentStateService;
 use App\Application\Services\OutboxService;
 use App\Domain\Procurement\Exceptions\PurchaseInvoiceValidationException;
+use App\Domain\Sales\Enums\PaymentStatus;
 use App\Domain\Shared\Enums\DocumentState;
 use App\Domain\Shared\Enums\DocumentType;
+use App\Infrastructure\Persistence\Models\Payable;
 use App\Infrastructure\Persistence\Models\PurchaseInvoice;
 use Illuminate\Support\Facades\DB;
 
@@ -24,6 +26,11 @@ use Illuminate\Support\Facades\DB;
  * TIDAK ADA alur ambang/`ApprovalService` — §10 tidak menetapkan TH untuk
  * faktur pembelian. Finalisasi murni digerbang
  * `PurchaseInvoicePolicy::finalize()` (`approve_goods_receipt`).
+ *
+ * Penutup gap FR-M11a-05 (`HS-DB-RIGHTCLICK-v1.0` §4.6): satu baris
+ * `Payable` dibuat DI SINI untuk SETIAP faktur yang difinalisasi (beda dari
+ * `Receivable` sisi AR yang kondisional — tidak ada konsep "DP" pembelian
+ * di T5.2, `total_amount` penuh SELALU jadi hutang awal).
  */
 final class FinalizePurchaseInvoiceAction
 {
@@ -44,9 +51,19 @@ final class FinalizePurchaseInvoiceAction
             $purchaseInvoice->document_number = $this->documentNumbers->next(DocumentType::PurchaseInvoice, $purchaseInvoice->branch);
             $purchaseInvoice->save();
 
+            Payable::create([
+                'branch_id' => $purchaseInvoice->branch_id,
+                'purchase_invoice_id' => $purchaseInvoice->id,
+                'partner_id' => $purchaseInvoice->partner_id,
+                'original_amount' => $purchaseInvoice->total_amount,
+                'paid_amount' => '0.00',
+                'outstanding_amount' => $purchaseInvoice->total_amount,
+                'payment_status' => PaymentStatus::Unpaid,
+            ]);
+
             $this->documentStates->finalize($purchaseInvoice);
 
-            $this->outbox->record($purchaseInvoice->branch, $purchaseInvoice, 'purchase_invoice.finalized');
+            $this->outbox->record($purchaseInvoice->branch, $purchaseInvoice, 'purchase_invoice.finalized', ['payable']);
 
             return $purchaseInvoice->fresh();
         });

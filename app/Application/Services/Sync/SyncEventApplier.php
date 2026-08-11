@@ -44,7 +44,11 @@ final class SyncEventApplier
      * @var array<string, array{table: string, children: array<string, string>}>
      */
     private const REGISTRY = [
-        'sale' => ['table' => 'sales', 'children' => ['items' => 'sale_items', 'payments' => 'sale_payments']],
+        // 'receivable' (T5.7 lama tanpa anak) DITAMBAH menutup gap FR-M11a-05
+        // (HS-DB-RIGHTCLICK-v1.0 §4.6) — relasi HasOne, BUKAN HasMany seperti
+        // 'items'/'lines' lain di registry ini; lihat upsertChildren() untuk
+        // penanganan bentuk payload tunggal (bukan list) yang berbeda.
+        'sale' => ['table' => 'sales', 'children' => ['items' => 'sale_items', 'payments' => 'sale_payments', 'receivable' => 'receivables']],
         'sale_return' => ['table' => 'sale_returns', 'children' => ['lines' => 'sale_return_lines']],
         'cashier_shift' => ['table' => 'cashier_shifts', 'children' => ['counts' => 'cashier_shift_counts']],
         'stock_adjustment' => ['table' => 'stock_adjustments', 'children' => ['lines' => 'stock_adjustment_lines']],
@@ -53,9 +57,10 @@ final class SyncEventApplier
         'stock_transfer_receipt' => ['table' => 'stock_transfer_receipts', 'children' => []],
         'purchase_order' => ['table' => 'purchase_orders', 'children' => ['lines' => 'purchase_order_lines']],
         'goods_receipt' => ['table' => 'goods_receipts', 'children' => ['lines' => 'goods_receipt_lines']],
-        'purchase_invoice' => ['table' => 'purchase_invoices', 'children' => []],
-        'purchase_payment' => ['table' => 'purchase_payments', 'children' => []],
-        'receivable_payment' => ['table' => 'receivable_payments', 'children' => []],
+        // 'payable' (HasOne, sama catatan 'receivable' di atas) — penutup gap FR-M11a-05.
+        'purchase_invoice' => ['table' => 'purchase_invoices', 'children' => ['payable' => 'payables']],
+        'purchase_payment' => ['table' => 'purchase_payments', 'children' => ['allocations' => 'purchase_payment_allocations']],
+        'receivable_payment' => ['table' => 'receivable_payments', 'children' => ['allocations' => 'receivable_payment_allocations']],
     ];
 
     /**
@@ -116,6 +121,15 @@ final class SyncEventApplier
 
             if (! is_array($rows) || $rows === []) {
                 continue;
+            }
+
+            // Relasi HasOne (mis. 'receivable'/'payable', FR-M11a-05) dikirim
+            // OutboxService sebagai SATU baris asosiatif (kunci nama kolom),
+            // BUKAN list — beda dari relasi HasMany ('items'/'lines') yang
+            // sudah berbentuk list of associative array. `array_is_list()`
+            // membedakan keduanya tanpa perlu tahu jenis relasi eksplisit.
+            if (! array_is_list($rows)) {
+                $rows = [$rows];
             }
 
             DB::table($table)->upsert($rows, ['id']);

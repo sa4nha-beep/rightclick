@@ -24,11 +24,25 @@ use Illuminate\Support\Facades\DB;
  * ini — tanpa ini, kas yang sudah dibalikkan lewat void tetap tercatat
  * sebagai masuk selamanya di ledger kas.
  *
- * Ditolak bila sudah ada `receivable_payments` tercatat (T5.5) — pola
+ * Ditolak bila `Receivable` terkait sudah punya `paid_amount > 0` — pola
  * sama `VoidPurchaseInvoiceAction` (T5.3): pelunasan piutang bersifat
  * immutable tanpa mekanisme koreksi individual, jadi membatalkan
  * penjualan yang sudah menerima cicilan pelunasan akan meninggalkan
- * pembayaran yang tidak jelas dasarnya.
+ * pembayaran yang tidak jelas dasarnya. Setelah guard lolos (berarti
+ * `paid_amount` masih nol), baris `Receivable` ikut di-soft-delete — tidak
+ * ada lagi yang perlu ditagih atas Sale yang dibatalkan (penutup gap
+ * FR-M11a-05, lihat docblock `Receivable`).
+ *
+ * `Receivable` yang baru di-soft-delete DILAMPIRKAN LEWAT `$extra`, BUKAN
+ * `$relations` — bug nyata ditemukan saat menulis ini: `OutboxService::record()`
+ * memanggil `$document->refresh()` yang me-refresh ULANG setiap relasi yang
+ * SUDAH dimuat (`Model::refresh()` bawaan Laravel), dan query default
+ * relasi `SoftDeletes` MENGECUALIKAN baris yang baru saja di-soft-delete —
+ * hasilnya payload akan berisi `null`, bukan snapshot `deleted_at` yang
+ * benar, dan HQ TIDAK PERNAH tahu piutang ini sudah dibatalkan. Snapshot
+ * diambil manual dari objek `$receivable` yang SAMA yang baru dipanggil
+ * `->delete()` (sudah punya `deleted_at` di memori sebelum query apa pun
+ * berikutnya menimpanya).
  *
  * `OutboxService` (T5.7 retrofit, simpul kritis): `sale.voided`.
  *
@@ -50,16 +64,22 @@ final class VoidSaleAction
     public function execute(Sale $sale, string $reason): Sale
     {
         return DB::transaction(function () use ($sale, $reason) {
-            if ($sale->receivablePayments()->exists()) {
+            $receivable = $sale->receivable;
+
+            if ($receivable !== null && bccomp((string) $receivable->paid_amount, '0', 2) > 0) {
                 throw new SaleValidationException(
                     'Penjualan ini sudah menerima pelunasan piutang — tidak dapat dibatalkan selama ada cicilan tercatat.',
                 );
             }
 
+            $receivable?->delete();
+
             $this->stockLedger->reverseForReference($sale, $sale);
             $this->cashLedger->reverseForReference($sale, $sale);
             $this->documentStates->void($sale, $reason);
-            $this->outbox->record($sale->branch, $sale, 'sale.voided');
+
+            $extra = $receivable !== null ? ['receivable' => $receivable->attributesToArray()] : [];
+            $this->outbox->record($sale->branch, $sale, 'sale.voided', extra: $extra);
 
             return $sale->fresh();
         });

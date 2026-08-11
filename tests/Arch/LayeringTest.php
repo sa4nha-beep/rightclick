@@ -234,4 +234,6 @@ it('setiap entitas Procurement + Kas Fase 5 memiliki Filament Resource yang menu
     ['App\Presentation\Filament\Resources\GoodsReceipts\GoodsReceiptResource', 'App\Infrastructure\Persistence\Models\GoodsReceipt'],
     ['App\Presentation\Filament\Resources\PurchaseInvoices\PurchaseInvoiceResource', 'App\Infrastructure\Persistence\Models\PurchaseInvoice'],
     ['App\Presentation\Filament\Resources\CashEntries\CashEntryResource', 'App\Infrastructure\Persistence\Models\CashEntry'],
+    ['App\Presentation\Filament\Resources\Receivables\ReceivableResource', 'App\Infrastructure\Persistence\Models\Receivable'],
+    ['App\Presentation\Filament\Resources\Payables\PayableResource', 'App\Infrastructure\Persistence\Models\Payable'],
 ]);
